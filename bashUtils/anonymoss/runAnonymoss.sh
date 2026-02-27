@@ -33,7 +33,7 @@ fi
 
 g++ "./${anonCCFile}" -o "anonSh.exe" || exit 1
 startPath=$(pwd)
-for file in 'moss_output/'*; do
+for file in './moss_output/'*; do
     if [[ -d "${file}" 
           && ( -f "${file}/readable.html" || -f "${file}/_readable.html") 
     ]]; then
