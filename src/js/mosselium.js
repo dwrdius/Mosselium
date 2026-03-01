@@ -33,8 +33,8 @@ let selectedLink = null;
 let tooltipSide = "right";
 let tooltipVertical = "top";
 let recenterOnClick = true;
-var audioBoom = new Audio('audio/easteregg.mp3');
-var audioRoll = new Audio('audio/music.mp3');
+var audioBoom = new Audio('../audio/easteregg.mp3');
+var audioRoll = new Audio('../audio/music.mp3');
 let boomChance = 100; // 1 in boomChance of boom
 
 const isMac = /Mac/i.test(navigator.userAgent);
