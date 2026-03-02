@@ -1,11 +1,11 @@
 #include <iostream>
 #include <fstream>
-#include <unordered_map>
+#include <map>
 #include <cassert>
 
 using namespace std;
 
-string output = "anonysed.out";
+string output = "anonysed.sed";
 string basename = "Anon";
 
 int main(int argc, char* argv[]) {
@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    unordered_map<string,int> mp;
+    map<string,int> mp;
     int unique = 0;
     for (char c = ' '; fin >> c; ) {
         if (c == '.') {
@@ -39,8 +39,9 @@ int main(int argc, char* argv[]) {
 
     ofstream fout(output);
     for (auto [s, i] : mp) {
-        fout << "find . -type f -name \"*.html\" -exec sed -i"
-             << " 's/" << s << "/" << basename << i << "/g' {} +" << endl;
-             //   {s}/   {e}    /     {d          }     /g
+        // fout << "find . -type f -name \"*.html\" -exec sed -i"
+        //      << " 's/" << s << "/" << basename << i << "/g' {} +" << endl;
+        //      //   {s}/   {e}    /     {d          }     /g
+        fout << "s/" << s << "/" << basename << i << "/g" << endl;
     }
 }

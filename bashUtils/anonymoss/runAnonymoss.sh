@@ -3,7 +3,8 @@
 anonCCFile="ccAnonymoss.cc"
 
 basename="Anon"
-outfile="anonSh.out"
+outfile="anonSh.sed"
+verbose="false"
 
 usage() {
     echo "Usage: $0 [-b <basename>] [-o <outfile>]"
@@ -14,10 +15,11 @@ usage() {
     exit 1
 }
 
-while getopts "b:o:h" opt; do
+while getopts "b:o:vh" opt; do
     case $opt in
         b) basename="$OPTARG" ;;
         o) outfile="$OPTARG" ;;
+        v) verbose="true" ;;
         h) usage ;;
         *) usage ;;
     esac
@@ -37,7 +39,7 @@ for file in './moss_output/'*; do
     if [[ -d "${file}" 
           && ( -f "${file}/readable.html" || -f "${file}/_readable.html") 
     ]]; then
-        echo "${file}"
+        echo "Anonymizing ${file}"
         cd "${file}"
         currPath=$(pwd)
         "${startPath}"/anonSh.exe "${outfile}" "${basename}"
@@ -47,10 +49,12 @@ for file in './moss_output/'*; do
             rm "./${outfile}"
             exit 1;
         fi
-        # cat "./${outfile}"
-        bash "./${outfile}"
+        if [[ "${verbose}" == "true" ]]; then
+            cat "./${outfile}"
+        fi
+        find . -type f -name "*.html" -exec sed -i -f "./${outfile}" {} + 
         rm "./${outfile}"
-        cd -
+        cd - &> /dev/null
     fi
 done
 
