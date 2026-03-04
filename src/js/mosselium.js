@@ -33,6 +33,7 @@ let selectedLink = null;
 let tooltipSide = "right";
 let tooltipVertical = "top";
 let recenterOnClick = true;
+
 var audioBoom = new Audio('../audio/easteregg.mp3');
 var audioRoll = new Audio('../audio/music.mp3');
 let boomChance = 100; // 1 in boomChance of boom
@@ -45,7 +46,7 @@ const folderInput = document.getElementById("folderInput");
 const uploadBtn = document.getElementById("uploadBtn");
 const resetBtn = document.getElementById("resetBtn");
 const select = document.getElementById("topLinks");
-const autoRecenter = document.getElementById("autoRecenter");
+const autoRecenterToggle = document.getElementById("autoRecenter");
 
 document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('shortcuts-info').innerHTML = `
@@ -131,8 +132,8 @@ window.addEventListener("keydown", (e) => {
     }
 });
 
-autoRecenter.addEventListener("change", () => {
-    recenterOnClick = autoRecenter.checked;
+autoRecenterToggle.addEventListener("change", () => {
+    recenterOnClick = autoRecenterToggle.checked;
     console.log(recenterOnClick);
 });
 
@@ -225,7 +226,7 @@ function generateGraph(links) {
 
             tooltip.style("visibility", "visible").html(`Similarity: <strong>${Math.round(d.weight)}%</strong>`);
 
-            if (!isPinned && e.shiftKey) {
+            if (!isPinnedPreview && e.shiftKey) {
                 showPreview(d);
             }
         })
@@ -233,7 +234,7 @@ function generateGraph(links) {
             hoveredLinkData = null; 
             tooltip.style("visibility", "hidden"); 
             previewTimeout = setTimeout(() => {
-                if (!isPinned) {
+                if (!isPinnedPreview) {
                     clearPreview();
                 }
             }, HIDE_DELAY);
@@ -262,7 +263,7 @@ function generateGraph(links) {
             else if (tooltipSide === "left" && spaceRight > (tooltipWidth + cursorGap + buffer)) {
                 tooltipSide = "right";
             }
-            if (!isPinned) {
+            if (!isPinnedPreview) {
                 if (previewSide === "right" && e.pageX / window.innerWidth > 0.6) {
                     previewSide = "left";
                     if (previewOn) showPreview(d);
@@ -290,7 +291,7 @@ function generateGraph(links) {
             e.stopPropagation();
             boom();
             if (e.shiftKey) {
-                isPinned = true;
+                isPinnedPreview = true;
                 previewWindow.style.pointerEvents = "auto";
                 showPreview(d);
             }

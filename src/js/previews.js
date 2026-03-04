@@ -1,4 +1,4 @@
-let isPinned = false;
+let isPinnedPreview = false;
 let previewOn = false;
 let previewSide = "left";
 let previewTimeout = null;
@@ -17,7 +17,7 @@ previewScale.addEventListener("input", () => {
 });
 
 function clearPreview() {
-    isPinned = false;
+    isPinnedPreview = false;
     previewWindow.classList.remove("visible");
     currentPreview = null;
     pinnedPreview = null;
@@ -26,7 +26,7 @@ function clearPreview() {
 
 async function showPreview(d) {
     const oldSide = previewWindow.dataset.side;
-    if (isPinned) {
+    if (isPinnedPreview) {
         if (pinnedPreview == null) {
             pinnedPreview = d;
         }
@@ -79,7 +79,7 @@ async function showPreview(d) {
         }
     }
 
-    previewWindow.style.borderColor = isPinned ? "var(--highlight)" : "var(--accent)";
+    previewWindow.style.borderColor = isPinnedPreview ? "var(--highlight)" : "var(--accent)";
     previewOn = true;
 }
 
@@ -95,7 +95,7 @@ function applyPosition(side) {
 }
 
 window.addEventListener("keyup", (e) => {
-    if (e.key === "Shift" && !isPinned) {
+    if (e.key === "Shift" && !isPinnedPreview) {
         clearPreview();
     }
 });
