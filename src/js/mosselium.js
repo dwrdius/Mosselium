@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
         • <b>Shift + Hover</b>: Quick Peek
         `;
     
-    previewWindow.style.pointerEvents = "none";
+    disablePreviewPointerEvents();
 
     svg = d3.select("#graph");
     container = svg.append("g");
@@ -158,28 +158,22 @@ function generateGraph(links) {
         .attr("stroke-width", d => edgeScale(d.weight))
         .attr("stroke-opacity", 0.6)
         .on("mouseover", async (e, d) => {            
-            if (previewTimeout) {
-                clearTimeout(previewTimeout);
-                previewTimeout = null;
-            }
-
             hoveredLinkData = d;
             hoveredLinkElement = e;
 
             tooltip.style("visibility", "visible").html(`Similarity: <strong>${Math.round(d.weight)}%</strong>`);
 
-            if (!isPinnedPreview && e.shiftKey) {
-                showPreview(d);
+            updatePreviewTimer("off");
+
+            if (e.shiftKey) {
+                enablePreview(d);
             }
         })
         .on("mouseout", () => { 
             hoveredLinkData = null; 
             tooltip.style("visibility", "hidden"); 
-            previewTimeout = setTimeout(() => {
-                if (!isPinnedPreview) {
-                    clearPreview();
-                }
-            }, PREVIEW_HIDE_DELAY);
+            
+            updatePreviewTimer("on");
         })
         .on("mousemove", function(e, d) {
             const tooltipNode = tooltip.node();
@@ -188,40 +182,33 @@ function generateGraph(links) {
             
             const tooltipCursorGap = 10;
             const tooltipEdgeGap = 20;
-            
-            const previewCursorGap = 50;
-            const buffer = 50; // Prevents jitter at the edges
+            const cursorThreshold = 50;
+            const backlashBuffer = 50;
+
+            handleMousePreviewSide(d, e.pageX, window.innerWidth, backlashBuffer, cursorThreshold);
 
             const spaceAbove = e.pageY;
             if (tooltipVertical === "top" && spaceAbove < (tooltipHeight + tooltipCursorGap + tooltipEdgeGap)) {
                 tooltipVertical = "bottom";
             } 
-            else if (tooltipVertical === "bottom" && spaceAbove > (tooltipHeight + tooltipCursorGap + buffer)) {
+            else if (tooltipVertical === "bottom" && spaceAbove > (tooltipHeight + tooltipCursorGap + backlashBuffer)) {
                 tooltipVertical = "top";
             }
 
-            const spaceRight = window.innerWidth - e.pageX;
+            const spaceRight = (getPreviewSide() == "left") 
+                                    ? window.innerWidth - e.pageX 
+                                    : getPreviewInnerCoord() - e.pageX;
+            console.log(spaceRight);
             if (tooltipSide === "right" && spaceRight < (tooltipWidth + tooltipCursorGap + tooltipEdgeGap)) {
                 tooltipSide = "left";
             } 
-            else if (tooltipSide === "left" && spaceRight > (tooltipWidth + tooltipCursorGap + buffer)) {
+            else if (tooltipSide === "left" && spaceRight > (tooltipWidth + tooltipCursorGap + backlashBuffer)) {
                 tooltipSide = "right";
             }
-            if (!isPinnedPreview) {
-                if (previewSide === "right" && e.pageX + previewCursorGap + previewWindow.offsetWidth > window.innerWidth) {
-                    previewSide = "left";
-                    if (previewOn) showPreview(d);
-                } 
-                else if (previewSide === "left" && e.pageX + previewCursorGap + buffer + previewWindow.offsetWidth < window.innerWidth) {
-                    previewSide = "right";
-                    if (previewOn) showPreview(d);
-                }
-            }
 
-            // --- Apply Final Positions ---
             const vert = (tooltipVertical === "top") 
                 ? (e.pageY - tooltipHeight - tooltipCursorGap) 
-                : (e.pageY + tooltipHeight + tooltipCursorGap );
+                : (e.pageY + tooltipHeight + tooltipCursorGap);
                 
             const horiz = (tooltipSide === "right") 
                 ? (e.pageX + tooltipCursorGap) 
@@ -235,9 +222,7 @@ function generateGraph(links) {
             e.stopPropagation();
             boom();
             if (e.shiftKey) {
-                isPinnedPreview = true;
-                previewWindow.style.pointerEvents = "auto";
-                showPreview(d);
+                enablePreview(d, true);
             }
             else {
                 const html = await getProcessedHtml(d.fileName);
@@ -306,9 +291,9 @@ function updateMultiSelection(recenter=false) {
 
     let adjNodeIds = new Set();
     let linkMap = new Map();
-    const extLink = {"opacity" : 0.04, "width" : 1};
-    const adjLink = {"opacity" : 0.6, "width" : 6};
-    const intLink = {"opacity" : 1, "width" : 12};
+    const extLink = {"opacity" : 0.04, "width" : 1, "ptrEvnts" : "none"};
+    const adjLink = {"opacity" : 0.6, "width" : 6, "ptrEvnts" : "auto"};
+    const intLink = {"opacity" : 1, "width" : 12, "ptrEvnts" : "auto"};
     linkElements.each(l => {
         const sId = l.source.id || l.source;
         const tId = l.target.id || l.target;
@@ -363,7 +348,7 @@ function updateMultiSelection(recenter=false) {
     linkElements.transition().duration(THEME.speedFast)
         .attr("stroke-opacity", l => linkMap.get(l)["opacity"])
         .attr("stroke-width", l => linkMap.get(l)["width"])
-        .attr("pointer-events", l => (linkMap[l] == 0) ? "none" : "auto");
+        .attr("pointer-events", l => linkMap.get(l)["ptrEvnts"]);
     
     nodeElements.classed("selected", n => selectedNodeIds.has(n.id))
         .transition().duration(THEME.speedFast)

@@ -43,7 +43,7 @@
     transform: translateX(110%);
     opacity: 0;
 
-    will-change: transform, opacity, visibility, width;
+    will-change: transform, opacity, visibility, width, pointer-events, border-color;
     transition: transform 0.4s ease-out, 
                 opacity 0.3s ease-out,
                 visibility 0.4s;
@@ -62,6 +62,10 @@
     transform: translateX(0);
     visibility: visible;
     opacity: 1;
+}
+#preview-window.pinned {
+    pointer-events: auto;
+    border-color: var(--highlight);
 }
 
 .preview-resize-handle {

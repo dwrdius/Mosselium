@@ -10,10 +10,11 @@ previewScale.addEventListener("input", () => {
 function clearPreview() {
     isPinnedPreview = false;
     previewWindow.classList.remove("visible");
+    previewWindow.classList.remove("pinned");
     previewWindow.style.width = "";
     currentPreview = null;
     pinnedPreview = null;
-    previewOn = false;    
+    previewOn = false;  
 }
 
 async function showPreview(d) {
@@ -70,7 +71,6 @@ async function showPreview(d) {
         });
     }
 
-    previewWindow.style.borderColor = isPinnedPreview ? "var(--highlight)" : "var(--accent)";
     previewOn = true;
 }
 
@@ -112,5 +112,66 @@ document.addEventListener("mousemove", (e) => {
 
 document.addEventListener("mouseup", () => {
     resizing = false;
-    previewWindow.style.pointerEvents = "auto";
+    previewWindow.style.pointerEvents = "";
 });
+
+function handleMousePreviewSide(d, mousePageX, maxPos, backlashBuffer = 50, cursorGap = 50) {
+    if (!isPinnedPreview) {
+        const effectiveMousePos = mousePageX + cursorGap + previewWindow.offsetWidth;
+        if (previewSide === "right" && effectiveMousePos > maxPos) {
+            previewSide = "left";
+            if (previewOn) showPreview(d);
+        } 
+        else if (previewSide === "left" && effectiveMousePos + backlashBuffer < maxPos) {
+            previewSide = "right";
+            if (previewOn) showPreview(d);
+        }
+    }
+}
+
+function getPreviewSide() {
+    return previewWindow.dataset.side;
+}
+
+function getPreviewWidth() {
+    return previewWindow.offsetWidth;
+}
+
+function getPreviewInnerCoord() {
+    if (getPreviewSide() == "left") {
+        return previewWindow.getBoundingClientRect().right;
+    }
+    else {
+        return previewWindow.getBoundingClientRect().left;
+    }
+}
+
+function disablePreviewPointerEvents() {
+    previewWindow.style.pointerEvents = "none";
+}
+
+function updatePreviewTimer(state) {
+    if (isPinnedPreview) return;
+
+    if (state === "on") {
+        previewTimeout = setTimeout(() => {
+            if (!isPinnedPreview) {
+                clearPreview();
+            }
+        }, PREVIEW_HIDE_DELAY);
+    }
+    else if (previewTimeout) {
+        clearTimeout(previewTimeout);
+        previewTimeout = null;
+    }
+}
+
+function enablePreview(d, enablePin = false) {
+    if (!isPinnedPreview) {
+        if (enablePin) {
+            isPinnedPreview = true;
+            previewWindow.classList.add("pinned");
+        }
+        showPreview(d);
+    }
+}
