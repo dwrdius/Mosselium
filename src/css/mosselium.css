@@ -23,7 +23,10 @@
 }
 
 body, html {
-    margin: 0; padding: 0; height: 100%; width: 100%;
+    margin: 0; 
+    padding: 0; 
+    height: 100%; 
+    width: 100%;
     background: var(--bg-color);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     color: var(--text-color);
@@ -31,11 +34,19 @@ body, html {
 }
 
 #controls {
-    position: absolute; top: 20px; left: 20px; z-index: 10;
-    background: var(--panel-bg); padding: 15px; border-radius: 8px;
+    z-index: 10;
+
+    position: absolute; 
+    top: 20px; 
+    left: 20px; 
+
+    background: var(--panel-bg); 
+    padding: 15px; 
+    border-radius: 8px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.5); width: 280px;
 
-    transition: transform 0.4s ease-out, opacity 0.3s ease-out;
+    transition: transform 0.4s ease-out, 
+                opacity 0.3s ease-out;
     transform-origin: center;
 }
 #controls.left {
@@ -47,13 +58,17 @@ body, html {
 
 button, select {
     width: 100%;
+    color: var(--text-color);
+
     padding: var(--menu-padding);
     margin-top: var(--menu-margin);
     background: var(--button-color);
-    color: var(--text-color);
+    
     border: 1px solid var(--menu-border-color);
     border-radius: var(--menu-border-radius);
+    
     cursor: pointer;
+    
     transition: all var(--transition-speed);
 }
 button:hover { 
@@ -61,19 +76,41 @@ button:hover {
     border-color: var(--accent); 
 }
 
-svg { width: 100vw; height: 100vh; cursor: crosshair; }
+svg { 
+    width: 100vw; 
+    height: 100vh; 
+    cursor: crosshair; 
+}
 
 .node { 
-    stroke-width: 1.5px; cursor: pointer; 
-    transition: stroke-width var(--transition-speed), opacity var(--transition-speed); 
+    stroke-width: 1.5px; 
+    cursor: pointer; 
+    transition: stroke-width var(--transition-speed), 
+                opacity var(--transition-speed); 
 }
-.node:hover { stroke-width: 3px; }
-.node.selected { stroke: var(--highlight) !important; stroke-width: 4px !important; }
+.node:hover { 
+    stroke-width: 3px; 
+}
+.node.selected { 
+    stroke: var(--highlight) !important; 
+    stroke-width: 4px !important; 
+}
 
-.link { cursor: pointer; transition: stroke-opacity var(--transition-speed), stroke-width var(--transition-speed); }
-.label { fill: #ccc; font-size: 11px; pointer-events: none; text-shadow: 1px 1px 2px #000; }
+.link { 
+    cursor: pointer; 
+    transition: stroke-opacity var(--transition-speed), 
+                stroke-width var(--transition-speed); 
+}
+.label { 
+    fill: #ccc; 
+    font-size: 11px; 
+    pointer-events: none; 
+    text-shadow: 1px 1px 2px #000; 
+}
 
 #tooltip {
+    z-index: 2000;
+
     position: absolute; 
     visibility: hidden; 
     background: rgba(0,0,0,0.9);
@@ -82,7 +119,6 @@ svg { width: 100vw; height: 100vh; cursor: crosshair; }
     border-radius: 4px; 
     font-size: 12px; 
     border: 1px solid var(--accent); 
-    z-index: 2000;
     pointer-events: none;
     transition: left var(--transition-speed) ease-out, 
                 right var(--transition-speed) ease-out, 
@@ -94,6 +130,8 @@ svg { width: 100vw; height: 100vh; cursor: crosshair; }
     transition: none !important;
 }
 #preview-window {
+    z-index: 3000;
+    
     display: flex;
     flex-direction: column;
     position: fixed;
@@ -108,14 +146,14 @@ svg { width: 100vw; height: 100vh; cursor: crosshair; }
     background: #1e1e1e;
     border: 3px solid var(--accent);
     border-radius: 8px;
-    z-index: 3000;
     overflow: hidden;
 
     transform: translateX(110%);
     opacity: 0;
 
-    transition: transform 0.4s ease-out, opacity 0.3s ease-out;
     will-change: transform, opacity;
+    transition: transform 0.4s ease-out, 
+                opacity 0.3s ease-out;
 }
 #preview-window[data-side="right"] {
     transform: translateX(110%);
@@ -145,7 +183,7 @@ svg { width: 100vw; height: 100vh; cursor: crosshair; }
     width: calc(100% / var(--preview-scale)); 
     height: calc(100% / var(--preview-scale)); 
     
-    transform: scale(calc(var(--preview-scale)));
+    transform: scale(var(--preview-scale));
     transform-origin: top left;
     
     border: none;
