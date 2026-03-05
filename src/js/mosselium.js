@@ -1,54 +1,6 @@
-const root = document.documentElement;
-const cssVars = getComputedStyle(root);
-
-function toMs(value) {
-    value = value.trim();
-
-    if (value.endsWith("ms")) return parseFloat(value);
-    if (value.endsWith("s")) return parseFloat(value) * 1000;
-
-    return parseFloat(value); // fallback
-}
-
-const THEME = {
-    speedFast: toMs(cssVars.getPropertyValue("--transition-speed")),
-    speedSlow: toMs(cssVars.getPropertyValue("--slow-transition-speed")),
-    gradientMin: cssVars.getPropertyValue("--gradient-min"),
-    gradientMid: cssVars.getPropertyValue("--gradient-mid"),
-    gradientMax: cssVars.getPropertyValue("--gradient-max"),
-    previewScale: cssVars.getPropertyValue("--preview-scale"),
-    bgColor: cssVars.getPropertyValue("--bg-color"),
-    nodeBorderColor: cssVars.getPropertyValue("--node-border-color"),
-    power: 2.5,
-};
-
-console.log(THEME);
-
-
-let colorScale = d3.scaleLinear().domain([0, 0.5, 1]).range([THEME.gradientMin, THEME.gradientMid, THEME.gradientMax]);
-let simulation, svg, container, zoom;
-let currentLinks = [], currentNodes = [], fileMap = {}, blobUrlMap = {};
-let selectedNodeIds = new Set();
-let selectedLink = null;
-let tooltipSide = "right";
-let tooltipVertical = "top";
-let recenterOnClick = true;
-
-var audioBoom = new Audio('../audio/easteregg.mp3');
-var audioRoll = new Audio('../audio/music.mp3');
-let boomChance = 100; // 1 in boomChance of boom
-
-const isMac = /Mac/i.test(navigator.userAgent);
-const cmdKeyName = isMac ? "⌘ Command" : "Ctrl";
-const edgeScale = d3.scalePow().exponent(THEME.power).domain([0, 100]).range([2, 20]);
-
-const folderInput = document.getElementById("folderInput");
-const uploadBtn = document.getElementById("uploadBtn");
-const resetBtn = document.getElementById("resetBtn");
-const select = document.getElementById("topLinks");
-const autoRecenterToggle = document.getElementById("autoRecenter");
-
 document.addEventListener("DOMContentLoaded", () => {
+    if (folderInput) folderInput.value = '';
+    
     document.getElementById('shortcuts-info').innerHTML = `
         • <b>${cmdKeyName} + Click</b>: Multi-select (Connected only)<br>
         • <b>Hover Link</b>: View Similarity %<br>
@@ -107,7 +59,14 @@ document.addEventListener("DOMContentLoaded", () => {
         
         for (const f of Array.from(files)) {
             fileMap[f.name] = f;
-            blobUrlMap[f.name] = URL.createObjectURL(f);
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                let content = e.target.result;
+                content = normalizeHTMLHeaders(content);
+                const blob = new Blob([content], { type: "text/html" });
+                blobUrlMap[f.name] = URL.createObjectURL(blob);
+            };
+            reader.readAsText(f, "UTF-8");
         }
 
         let readableFile = fileMap["_readable.html"];
@@ -132,31 +91,14 @@ window.addEventListener("keydown", (e) => {
     }
 });
 
+window.addEventListener('resize', () => {
+    if (simulation) simulation.force("center", d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2)).alpha(0.1).restart();
+});
+
 autoRecenterToggle.addEventListener("change", () => {
     recenterOnClick = autoRecenterToggle.checked;
     console.log(recenterOnClick);
 });
-
-function parseMoss(htmlText) {
-    const doc = new DOMParser().parseFromString(htmlText, "text/html");
-    const links = [];
-    doc.querySelectorAll("table tr").forEach(row => {
-        const anchors = row.querySelectorAll("a");
-        if (anchors.length === 2) {
-            const m1 = anchors[0].textContent.match(/(.*)\s\((\d+)%\)/);
-            const m2 = anchors[1].textContent.match(/(.*)\s\((\d+)%\)/);
-            if (m1 && m2) {
-                links.push({
-                    source: m1[1].trim(),
-                    target: m2[1].trim(),
-                    weight: (parseInt(m1[2]) + parseInt(m2[2])) / 2,
-                    fileName: anchors[0].getAttribute("href")
-                });
-            }
-        }
-    });
-    return links;
-}
 
 function containmentForce() {
     const centerX = window.innerWidth / 2;
@@ -237,38 +179,40 @@ function generateGraph(links) {
                 if (!isPinnedPreview) {
                     clearPreview();
                 }
-            }, HIDE_DELAY);
+            }, PREVIEW_HIDE_DELAY);
         })
         .on("mousemove", function(e, d) {
             const tooltipNode = tooltip.node();
             const tooltipHeight = tooltipNode.offsetHeight;
             const tooltipWidth = tooltipNode.offsetWidth;
             
-            const cursorGap = 10;
+            const tooltipCursorGap = 10;
+            const tooltipEdgeGap = 20;
+            
+            const previewCursorGap = 50;
             const buffer = 50; // Prevents jitter at the edges
-            const edgeGap = 20;
 
             const spaceAbove = e.pageY;
-            if (tooltipVertical === "top" && spaceAbove < (tooltipHeight + cursorGap + edgeGap)) {
+            if (tooltipVertical === "top" && spaceAbove < (tooltipHeight + tooltipCursorGap + tooltipEdgeGap)) {
                 tooltipVertical = "bottom";
             } 
-            else if (tooltipVertical === "bottom" && spaceAbove > (tooltipHeight + cursorGap + buffer)) {
+            else if (tooltipVertical === "bottom" && spaceAbove > (tooltipHeight + tooltipCursorGap + buffer)) {
                 tooltipVertical = "top";
             }
 
             const spaceRight = window.innerWidth - e.pageX;
-            if (tooltipSide === "right" && spaceRight < (tooltipWidth + cursorGap + edgeGap)) {
+            if (tooltipSide === "right" && spaceRight < (tooltipWidth + tooltipCursorGap + tooltipEdgeGap)) {
                 tooltipSide = "left";
             } 
-            else if (tooltipSide === "left" && spaceRight > (tooltipWidth + cursorGap + buffer)) {
+            else if (tooltipSide === "left" && spaceRight > (tooltipWidth + tooltipCursorGap + buffer)) {
                 tooltipSide = "right";
             }
             if (!isPinnedPreview) {
-                if (previewSide === "right" && e.pageX / window.innerWidth > 0.6) {
+                if (previewSide === "right" && e.pageX + previewCursorGap + previewWindow.offsetWidth > window.innerWidth) {
                     previewSide = "left";
                     if (previewOn) showPreview(d);
                 } 
-                else if (previewSide === "left" && (e.pageX + buffer) / window.innerWidth < 0.6) {
+                else if (previewSide === "left" && e.pageX + previewCursorGap + buffer + previewWindow.offsetWidth < window.innerWidth) {
                     previewSide = "right";
                     if (previewOn) showPreview(d);
                 }
@@ -276,12 +220,12 @@ function generateGraph(links) {
 
             // --- Apply Final Positions ---
             const vert = (tooltipVertical === "top") 
-                ? (e.pageY - tooltipHeight - cursorGap) 
-                : (e.pageY + tooltipHeight + cursorGap );
+                ? (e.pageY - tooltipHeight - tooltipCursorGap) 
+                : (e.pageY + tooltipHeight + tooltipCursorGap );
                 
             const horiz = (tooltipSide === "right") 
-                ? (e.pageX + cursorGap) 
-                : (e.pageX - tooltipWidth - cursorGap);
+                ? (e.pageX + tooltipCursorGap) 
+                : (e.pageX - tooltipWidth - tooltipCursorGap);
 
             tooltip
                 .style("top", `${vert}px`)
@@ -327,13 +271,6 @@ function generateGraph(links) {
     clearPreview();
     selectedNodeIds.clear();
     resetGraph(true);
-}
-
-function boom() {
-    if (Math.random()*boomChance < 1) {
-        audioBoom.play();
-        audioRoll.play();
-    }
 }
 
 function handleNodeClick(e, d) {
@@ -479,10 +416,24 @@ function setupGradients() {
     grad.append("stop").attr("offset", "100%").attr("stop-color", THEME.gradientMax);
 }
 
-function dragStarted(e, d) { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; }
-function dragged(e, d) { d.fx = e.x; d.fy = e.y; }
-function dragEnded(e, d) { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }
+function dragStarted(e, d) { 
+    if (!e.active) simulation.alphaTarget(0.3).restart(); 
+    d.fx = d.x; 
+    d.fy = d.y; 
+}
+function dragged(e, d) { 
+    d.fx = e.x; 
+    d.fy = e.y; 
+}
+function dragEnded(e, d) { 
+    if (!e.active) simulation.alphaTarget(0); 
+    d.fx = null; 
+    d.fy = null; 
+}
 
-window.addEventListener('resize', () => {
-    if (simulation) simulation.force("center", d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2)).alpha(0.1).restart();
-});
+function boom() {
+    if (Math.random()*boomChance < 1) {
+        audioBoom.play();
+        audioRoll.play();
+    }
+}

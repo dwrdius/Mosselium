@@ -5,10 +5,11 @@
     <title>MOSS Similarity Graph</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link rel="stylesheet" href="css/mosselium.css">
+    <link rel="stylesheet" href="css/previews.css">
 </head>
 <!-- ------------------------------------------------ -->
 <body>
-    <div id="controls">
+    <div id="controls" data-side="left">
         <h3 style="margin:0 0 10px 0; font-size: 16px; color: var(--accent);">MOSSelium</h3>
         <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;" />
         <button id="uploadBtn">Upload MOSS Folder</button>
@@ -28,14 +29,17 @@
     </div>
 
     <div id="tooltip"></div>
-    <div id="preview-window">
-        <div class="frame-wrapper">
+    <div id="preview-window" data-side="right">
+        <div class="preview-resize-handle"></div>
+        <div class="preview-frame-wrapper">
             <iframe id="preview-frame"></iframe>
         </div>
     </div>
 
     <svg id="graph"></svg>
 
+    <script src="js/globals.js"></script>
+    <script src="js/parsingUtils.js"></script>
     <script src="js/previews.js"></script>
     <script src="js/mosselium.js"></script>
 </body>

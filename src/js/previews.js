@@ -1,15 +1,6 @@
-let isPinnedPreview = false;
-let previewOn = false;
-let previewSide = "left";
-let previewTimeout = null;
-let currentPreview = null;
-let pinnedPreview = null;
-
-const HIDE_DELAY = 400;
-
-const previewWindow = document.getElementById("preview-window");
-const previewScale = document.getElementById("previewScale");
-const previewFrame = document.getElementById("preview-frame");
+const maxPreviewWidth = 0.7;
+const resizeHandle = previewWindow.querySelector(".preview-resize-handle");
+let resizing = false;
 
 previewScale.addEventListener("input", () => {
     document.documentElement.style
@@ -19,9 +10,10 @@ previewScale.addEventListener("input", () => {
 function clearPreview() {
     isPinnedPreview = false;
     previewWindow.classList.remove("visible");
+    previewWindow.style.width = "";
     currentPreview = null;
     pinnedPreview = null;
-    previewOn = false;
+    previewOn = false;    
 }
 
 async function showPreview(d) {
@@ -42,56 +34,51 @@ async function showPreview(d) {
 
     if (oldSide && oldSide !== previewSide && previewOn) {
         previewWindow.classList.remove("visible");
-
         await new Promise(resolve => {
             const onTransitionEnd = (e) => {
-                if (e.propertyName === "transform" || e.propertyName === "opacity") {
+                if (e.propertyName === "transform") {
                     previewWindow.removeEventListener("transitionend", onTransitionEnd);
                     resolve();
                 }
             };
+            // Safety timeout in case transition is interrupted/skipped
+            setTimeout(resolve, 600); 
             previewWindow.addEventListener("transitionend", onTransitionEnd);
         });
 
         previewWindow.style.transition = "none";
-
         applyPosition(previewSide);
-        previewWindow.dataset.side = previewSide;
-
-        previewWindow.offsetHeight; 
-
+        void previewWindow.offsetHeight; // Force reflow
         previewWindow.style.transition = "";
 
         requestAnimationFrame(() => {
             previewWindow.classList.add("visible");
         });
-    } else {
+
+    } 
+    else if (!previewOn) {
+        previewWindow.style.transition = "none";
         applyPosition(previewSide);
-        previewWindow.dataset.side = previewSide;
-        
-        if (!previewOn) {
+        previewWindow.offsetHeight; // force reflow
+        previewWindow.style.transition = "";
+
+        previewWindow.classList.remove("visible");
+        requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                previewWindow.classList.remove("visible");
-                requestAnimationFrame(() => {
-                    previewWindow.classList.add("visible");
-                });
+                previewWindow.classList.add("visible");
             });
-        }
+        });
     }
 
     previewWindow.style.borderColor = isPinnedPreview ? "var(--highlight)" : "var(--accent)";
     previewOn = true;
 }
 
-// Helper to handle the raw CSS positioning
 function applyPosition(side) {
+    previewWindow.dataset.side = side;
+
     const controls = document.getElementById("controls");
-    previewWindow.style.left = side === "left" ? "20px" : "auto";
-    previewWindow.style.right = side === "right" ? "20px" : "auto";
-    
-    const panelSide = side === "left" ? "right" : "left";
-    controls.classList.remove("left", "right");
-    controls.classList.add(panelSide);
+    controls.dataset.side = side === "left" ? "right" : "left";
 }
 
 window.addEventListener("keyup", (e) => {
@@ -100,12 +87,30 @@ window.addEventListener("keyup", (e) => {
     }
 });
 
-async function getProcessedHtml(fileName) {
-    const file = fileMap[fileName];
-    if (!file) return "";
-    let html = await file.text();
-    return html.replace(/(href|src|SRC|HREF)="([^"]+)"/g, (match, attr, path) => {
-        if (blobUrlMap[path]) return `${attr}="${blobUrlMap[path]}"`;
-        return match;
-    });
-}
+resizeHandle.addEventListener("mousedown", () => {
+    resizing = true;
+    previewWindow.style.pointerEvents = "none";
+});
+
+document.addEventListener("mousemove", (e) => {
+    if (!resizing) return;
+
+    const maxWidth = window.innerWidth * maxPreviewWidth;
+
+    let newWidth;
+
+    if (previewWindow.dataset.side === "right") {
+        newWidth = window.innerWidth - e.clientX - 20;
+    } else {
+        newWidth = e.clientX - 20;
+    }
+
+    newWidth = Math.max(300, Math.min(newWidth, maxWidth));
+
+    previewWindow.style.width = `${newWidth}px`;
+});
+
+document.addEventListener("mouseup", () => {
+    resizing = false;
+    previewWindow.style.pointerEvents = "auto";
+});

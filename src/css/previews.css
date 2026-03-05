@@ -1,0 +1,103 @@
+
+.no-transition {
+    transition: none !important;
+}
+
+#tooltip {
+    z-index: 2000;
+
+    position: absolute; 
+    visibility: hidden; 
+    background: rgba(0,0,0,0.9);
+    color: var(--text-color); 
+    padding: 8px; 
+    border-radius: 4px; 
+    font-size: 12px; 
+    border: 1px solid var(--accent); 
+    pointer-events: none;
+    transition: left var(--transition-speed) ease-out, 
+                right var(--transition-speed) ease-out, 
+                top var(--transition-speed) ease-out, 
+                bottom var(--transition-speed) ease-out;
+}
+
+#preview-window {
+    z-index: 3000;
+    
+    display: flex;
+    visibility: hidden;
+    flex-direction: column;
+    position: fixed;
+    pointer-events: none;
+
+    top: 20px;
+    bottom: 20px;
+    width: 35vw;
+    height: calc(100vh - 40px);
+
+    background: #1e1e1e;
+    border: 3px solid var(--accent);
+    border-radius: 8px;
+    overflow: hidden;
+
+    transform: translateX(110%);
+    opacity: 0;
+
+    will-change: transform, opacity, visibility, width;
+    transition: transform 0.4s ease-out, 
+                opacity 0.3s ease-out,
+                visibility 0.4s;
+}
+#preview-window[data-side="right"] {
+    transform: translateX(110%);
+    right: 20px;
+    left: auto;
+}
+#preview-window[data-side="left"] {
+    transform: translateX(-110%);
+    left: 20px;
+    right: auto;
+}
+#preview-window.visible {
+    transform: translateX(0);
+    visibility: visible;
+    opacity: 1;
+}
+
+.preview-resize-handle {
+    z-index: 4000;
+
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: ew-resize;
+    background: transparent;
+}
+.preview-resize-handle:hover {
+    background: var(--accent);
+}
+#preview-window[data-side="right"] .preview-resize-handle {
+    left: -4px;
+}
+#preview-window[data-side="left"] .preview-resize-handle {
+    right: -4px;
+}
+
+
+.preview-frame-wrapper {
+    flex: 1;
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+}
+#preview-frame {
+    width: calc(100% / var(--preview-scale)); 
+    height: calc(100% / var(--preview-scale)); 
+    
+    transform: scale(var(--preview-scale));
+    transform-origin: top left;
+    
+    border: none;
+    background: white;
+}
