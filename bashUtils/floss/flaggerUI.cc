@@ -83,6 +83,7 @@ int main(int argc, char * argv[]) {
     fout << "echo 'mosslist init'" << endl;
     fout << "mkdir -p ./flagged\n"; 
     fout << "rm -r ./flagged/*" << "\n";
+    fout << "touch ./flagged/.gitkeep" << "\n";
     fout << "cp ./recursiveCcToPdf.sh ./flagged\n";
 
     vector<string> questions{};
