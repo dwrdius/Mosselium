@@ -198,7 +198,6 @@ function generateGraph(links) {
             const spaceRight = (getPreviewSide() == "left") 
                                     ? window.innerWidth - e.pageX 
                                     : getPreviewInnerCoord() - e.pageX;
-            console.log(spaceRight);
             if (tooltipSide === "right" && spaceRight < (tooltipWidth + tooltipCursorGap + tooltipEdgeGap)) {
                 tooltipSide = "left";
             } 

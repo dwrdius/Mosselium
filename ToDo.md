@@ -1,0 +1,11 @@
+- annotations
+- flagging
+- grouping
+- deletion
+    - set of active and hidden; control force of inactive rather than true deletion
+- previous highlighting
+- userid searching
+- tooltip partitioning and updating after animations
+- collapsing control panel
+- ts
+- service worker

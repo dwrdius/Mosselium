@@ -1,0 +1,15 @@
+This is a template for using a service worker to 
+intercept the hrefs and srcs in previews/iframes 
+rather than resetting and regexing the html files
+with new blobs each time they are called in the 
+mosselium implementation.
+
+This unfortunately requires a server to work, so
+I will need to add a blob-maintained preview in
+the future for ease of use for people who wish to
+keep everything accessible within a single index
+click.
+
+This service worker needs to add caching and module
+support so that it does not become unusable when the
+browser inevitably kills it.
