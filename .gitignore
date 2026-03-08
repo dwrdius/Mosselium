@@ -3,3 +3,4 @@ audio/*
 **/moss_output/*
 !**/.gitkeep
 **/tooltips.js
+.testing/
