@@ -1,4 +1,41 @@
+import { 
+    clearPreview, 
+    showPreview, 
+    handleMousePreviewSide, 
+    disablePreviewPointerEvents, 
+    updatePreviewTimer, 
+    enablePreview 
+} from "./previews.js";
+import { showTooltip, hideTooltip, updateTooltipPosition } from "./tooltips.js";
+import { THEME, audioBoom, audioRoll, boomChance } from "./globals.js";
+import { parseMoss, getProcessedHtml, normalizeHTMLHeaders } from "./parsingUtils.js";
+
+export let currentLinks = [], currentNodes = [], fileMap = {}, blobUrlMap = {};
+let colorScale = d3.scaleLinear().domain([0, 0.5, 1]).range([THEME.gradientMin, THEME.gradientMid, THEME.gradientMax]);
+let simulation, svg, container, zoom;
+let selectedNodeIds = new Set();
+let selectedLink = null;
+let recenterOnClick = true;
+let hoveredLinkData = null;
+let hoveredLinkElement = null;
+
+const isMac = /Mac/i.test(navigator.userAgent);
+const cmdKeyName = isMac ? "⌘ Command" : "Ctrl";
+const edgeScale = d3.scalePow().exponent(THEME.power).domain([0, 100]).range([2, 20]);
+
+let folderInput, uploadBtn, resetBtn, select, autoRecenterToggle;
+
+function initDOMReferences() {
+    folderInput = document.getElementById("folderInput");
+    uploadBtn = document.getElementById("uploadBtn");
+    resetBtn = document.getElementById("resetBtn");
+    select = document.getElementById("topLinks");
+    autoRecenterToggle = document.getElementById("autoRecenter");
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+    initDOMReferences();
+
     if (folderInput) folderInput.value = '';
     
     document.getElementById('shortcuts-info').innerHTML = `
@@ -83,6 +120,11 @@ document.addEventListener("DOMContentLoaded", () => {
         generateGraph(currentLinks);        
         folderInput.value = '';
     };   
+
+    autoRecenterToggle.addEventListener("change", () => {
+        recenterOnClick = autoRecenterToggle.checked;
+        console.log(recenterOnClick);
+    });
 });
 
 window.addEventListener("keydown", (e) => {
@@ -93,11 +135,6 @@ window.addEventListener("keydown", (e) => {
 
 window.addEventListener('resize', () => {
     if (simulation) simulation.force("center", d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2)).alpha(0.1).restart();
-});
-
-autoRecenterToggle.addEventListener("change", () => {
-    recenterOnClick = autoRecenterToggle.checked;
-    console.log(recenterOnClick);
 });
 
 function containmentForce() {
@@ -123,7 +160,6 @@ function containmentForce() {
 
 function generateGraph(links) {
     container.selectAll("*").remove();
-    const tooltip = d3.select("#tooltip");
     
     const nodesMap = {};
     links.forEach(l => {
@@ -160,62 +196,25 @@ function generateGraph(links) {
         .on("mouseover", async (e, d) => {            
             hoveredLinkData = d;
             hoveredLinkElement = e;
-
-            tooltip.style("visibility", "visible").html(`Similarity: <strong>${Math.round(d.weight)}%</strong>`);
-
+            showTooltip(d);
             updatePreviewTimer("off");
-
             if (e.shiftKey) {
                 enablePreview(d);
             }
         })
         .on("mouseout", () => { 
             hoveredLinkData = null; 
-            tooltip.style("visibility", "hidden"); 
-            
+            hideTooltip();
             updatePreviewTimer("on");
         })
         .on("mousemove", function(e, d) {
-            const tooltipNode = tooltip.node();
-            const tooltipHeight = tooltipNode.offsetHeight;
-            const tooltipWidth = tooltipNode.offsetWidth;
-            
             const tooltipCursorGap = 10;
             const tooltipEdgeGap = 20;
             const cursorThreshold = 50;
             const backlashBuffer = 50;
 
             handleMousePreviewSide(d, e.pageX, window.innerWidth, backlashBuffer, cursorThreshold);
-
-            const spaceAbove = e.pageY;
-            if (tooltipVertical === "top" && spaceAbove < (tooltipHeight + tooltipCursorGap + tooltipEdgeGap)) {
-                tooltipVertical = "bottom";
-            } 
-            else if (tooltipVertical === "bottom" && spaceAbove > (tooltipHeight + tooltipCursorGap + backlashBuffer)) {
-                tooltipVertical = "top";
-            }
-
-            const spaceRight = (getPreviewSide() == "left") 
-                                    ? window.innerWidth - e.pageX 
-                                    : getPreviewInnerCoord() - e.pageX;
-            if (tooltipSide === "right" && spaceRight < (tooltipWidth + tooltipCursorGap + tooltipEdgeGap)) {
-                tooltipSide = "left";
-            } 
-            else if (tooltipSide === "left" && spaceRight > (tooltipWidth + tooltipCursorGap + backlashBuffer)) {
-                tooltipSide = "right";
-            }
-
-            const vert = (tooltipVertical === "top") 
-                ? (e.pageY - tooltipHeight - tooltipCursorGap) 
-                : (e.pageY + tooltipHeight + tooltipCursorGap);
-                
-            const horiz = (tooltipSide === "right") 
-                ? (e.pageX + tooltipCursorGap) 
-                : (e.pageX - tooltipWidth - tooltipCursorGap);
-
-            tooltip
-                .style("top", `${vert}px`)
-                .style("left", `${horiz}px`);
+            updateTooltipPosition(e.pageX, e.pageY, tooltipCursorGap, tooltipEdgeGap, backlashBuffer);
         })
         .on("click", async (e, d) => {
             e.stopPropagation();
