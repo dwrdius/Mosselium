@@ -178,6 +178,12 @@ function removeOrphanNodes() {
 // deletion
 window.addEventListener("keydown", (e) => {
     if (selectedNodeIds.size > 0 && (e.key == "Backspace" || e.key == "Delete")) {
+        // if (hoveredLinkData 
+        // && selectedNodeIds.has(hoveredLinkData.source.id || hoveredLinkData.source)
+        // && selectedNodeIds.has(hoveredLinkData.target.id || hoveredLinkData.target)) {
+        //     hideTooltip();
+        // }
+        
         currentNodes = currentNodes.filter(n => !selectedNodeIds.has(n.id));
 
         currentLinks = currentLinks.filter(l => {
@@ -186,11 +192,9 @@ window.addEventListener("keydown", (e) => {
             return !selectedNodeIds.has(s) && !selectedNodeIds.has(t);
         });
 
-        if (hoveredLinkData 
-        && selectedNodeIds.has(hoveredLinkData.source.id || hoveredLinkData.source)
-        && selectedNodeIds.has(hoveredLinkData.target.id || hoveredLinkData.target)) {
-            hideTooltip();
-        }
+        simulation.nodes(currentNodes);
+        simulation.force("link").links(currentLinks);
+        simulation.alpha(0.3).restart();
 
         removeOrphanNodes();
         
@@ -202,11 +206,7 @@ window.addEventListener("keydown", (e) => {
         labelSel.exit().remove();
 
         const linkSel = container.selectAll(".link").data(currentLinks, linkKey);
-        linkSel.exit().transition().duration(THEME.speedFast).attr("stroke-opacity", 0).remove();
-
-        simulation.nodes(currentNodes);
-        simulation.force("link").links(currentLinks);
-        simulation.alpha(0.3).restart();
+        linkSel.exit().transition().duration(THEME.speedFast).attr("stroke-opacity", 0).remove().on("end", hideTooltip());
 
         refreshDropdown();
         clearPreview();
@@ -244,13 +244,15 @@ function containmentForce() {
 
 function generateGraph(links) {
     container.selectAll("*").remove();
-    
+
     const nodesMap = {};
+    let counter = 0;
     links.forEach(l => {
         [l.source, l.target].forEach(id => {
             if (!nodesMap[id]) nodesMap[id] = { id, weightScore: 0 };
             nodesMap[id].weightScore += Math.pow(l.weight, THEME.power);
         });
+        counter++;
     });
     allNodes = Object.values(nodesMap);
     currentNodes = allNodes;

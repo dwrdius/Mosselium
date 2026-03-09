@@ -1,4 +1,5 @@
 import { getProcessedHtml } from "./parsingUtils.js";
+import { updateTooltipPosition } from "./tooltips.js";
 
 let isPinnedPreview = false;
 let previewOn = false;
@@ -47,6 +48,13 @@ export async function showPreview(d) {
     const fixedHtml = await getProcessedHtml(d.fileName);
     previewFrame.srcdoc = fixedHtml;
 
+    const handleTransitionEnd = (e) => {
+        if (e.target !== previewWindow) return;
+        
+        updateTooltipPosition();
+        previewWindow.removeEventListener("transitionend", handleTransitionEnd);
+    };
+
     if (oldSide && oldSide !== previewSide && previewOn) {
         previewWindow.classList.remove("visible");
         await new Promise(resolve => {
@@ -68,8 +76,8 @@ export async function showPreview(d) {
 
         requestAnimationFrame(() => {
             previewWindow.classList.add("visible");
+            previewWindow.addEventListener("transitionend", handleTransitionEnd);
         });
-
     } 
     else if (!previewOn) {
         previewWindow.style.transition = "none";
@@ -81,6 +89,7 @@ export async function showPreview(d) {
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 previewWindow.classList.add("visible");
+                previewWindow.addEventListener("transitionend", handleTransitionEnd);
             });
         });
     }
