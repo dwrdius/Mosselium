@@ -10,14 +10,15 @@ import { showTooltip, hideTooltip, updateTooltipPosition } from "./tooltips.js";
 import { THEME, audioBoom, audioRoll, boomChance } from "./globals.js";
 import { parseMoss, getProcessedHtml, normalizeHTMLHeaders } from "./parsingUtils.js";
 
-export let currentLinks = [], currentNodes = [], fileMap = {}, blobUrlMap = {};
+export let fileMap = {}, blobUrlMap = {};
+let currentLinks = [], currentNodes = []
+let allLinks = [], allNodes = [];
 let colorScale = d3.scaleLinear().domain([0, 0.5, 1]).range([THEME.gradientMin, THEME.gradientMid, THEME.gradientMax]);
 let simulation, svg, container, zoom;
 let selectedNodeIds = new Set();
 let selectedLink = null;
 let recenterOnClick = true;
 let hoveredLinkData = null;
-let hoveredLinkElement = null;
 
 const isMac = /Mac/i.test(navigator.userAgent);
 const cmdKeyName = isMac ? "⌘ Command" : "Ctrl";
@@ -56,7 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .on("zoom", (e) => {
             container.attr("transform", e.transform);
             if (e.sourceEvent) {
-                document.getElementById("topLinks").value = "";
+                select.value = "";
             }
         });
     svg.call(zoom);
@@ -116,8 +117,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
         const text = await readableFile.text();
-        currentLinks = parseMoss(text);
-        generateGraph(currentLinks);        
+        allLinks = parseMoss(text);
+        currentLinks = allLinks;
+        generateGraph(currentLinks);
         folderInput.value = '';
     };   
 
@@ -130,6 +132,88 @@ document.addEventListener("DOMContentLoaded", () => {
 window.addEventListener("keydown", (e) => {
     if (e.shiftKey && hoveredLinkData) {
         showPreview(hoveredLinkData);
+    }
+});
+
+function refreshDropdown() {
+    const select = document.getElementById("topLinks");
+    select.innerHTML = '<option value="">-- Jump to Match --</option>';
+    
+    currentLinks
+        .sort((a, b) => b.weight - a.weight)
+        .forEach((l, i) => {
+            const opt = document.createElement("option");
+            opt.value = i;
+            // Access .id because D3 converts strings to objects: {id: "name", x: 0, y: 0}
+            const sName = l.source.id || l.source;
+            const tName = l.target.id || l.target;
+            opt.text = `${Math.round(l.weight)}%: ${sName} - ${tName}`;
+            select.appendChild(opt);
+        });
+}
+
+function linkKey(d) {
+    const s = d.source.id || d.source;
+    const t = d.target.id || d.target;
+    return `${s}|${t}`;
+}
+
+function removeOrphanNodes() {
+    const connected = new Set();
+
+    currentLinks.forEach(l => {
+        const s = l.source.id || l.source;
+        const t = l.target.id || l.target;
+        connected.add(s);
+        connected.add(t);
+    });
+
+    currentNodes = currentNodes.filter(n => connected.has(n.id));
+
+    simulation.nodes(currentNodes);
+    simulation.force("link").links(currentLinks);
+    simulation.alpha(0.3).restart();
+}
+
+// deletion
+window.addEventListener("keydown", (e) => {
+    if (selectedNodeIds.size > 0 && (e.key == "Backspace" || e.key == "Delete")) {
+        currentNodes = currentNodes.filter(n => !selectedNodeIds.has(n.id));
+
+        currentLinks = currentLinks.filter(l => {
+            const s = l.source.id || l.source;
+            const t = l.target.id || l.target;
+            return !selectedNodeIds.has(s) && !selectedNodeIds.has(t);
+        });
+
+        if (hoveredLinkData 
+        && selectedNodeIds.has(hoveredLinkData.source.id || hoveredLinkData.source)
+        && selectedNodeIds.has(hoveredLinkData.target.id || hoveredLinkData.target)) {
+            hideTooltip();
+        }
+
+        removeOrphanNodes();
+        
+        // Update the SVG Elements
+        const nodeSel = container.selectAll(".node").data(currentNodes, d => d.id);
+        nodeSel.exit().transition().duration(THEME.speedFast).attr("r", 0).remove();
+
+        const labelSel = container.selectAll(".label").data(currentNodes, d => d.id);
+        labelSel.exit().remove();
+
+        const linkSel = container.selectAll(".link").data(currentLinks, linkKey);
+        linkSel.exit().transition().duration(THEME.speedFast).attr("stroke-opacity", 0).remove();
+
+        simulation.nodes(currentNodes);
+        simulation.force("link").links(currentLinks);
+        simulation.alpha(0.3).restart();
+
+        refreshDropdown();
+        clearPreview();
+        selectedNodeIds.clear();
+        
+        // Reset visual styles for remaining elements
+        setTimeout(() => resetGraph(false), THEME.speedFast + 10);
     }
 });
 
@@ -168,15 +252,10 @@ function generateGraph(links) {
             nodesMap[id].weightScore += Math.pow(l.weight, THEME.power);
         });
     });
-    currentNodes = Object.values(nodesMap);
+    allNodes = Object.values(nodesMap);
+    currentNodes = allNodes;
 
-    select.innerHTML = '<option value="">-- Jump to Match --</option>';
-    links.sort((a,b) => b.weight - a.weight).forEach((l, i) => {
-        const opt = document.createElement("option");
-        opt.value = i;
-        opt.text = `${Math.round(l.weight)}%: ${l.source} - ${l.target}`;
-        select.appendChild(opt);
-    });
+    refreshDropdown()
 
     const maxWeight = d3.max(currentNodes, d => d.weightScore);
     colorScale = d3.scaleLinear().domain([0, maxWeight*0.5, maxWeight]).range([THEME.gradientMin, THEME.gradientMid, THEME.gradientMax]);
@@ -188,14 +267,13 @@ function generateGraph(links) {
         .force("collision", d3.forceCollide().radius(d => 25 + (d.weightScore / maxWeight) * 20))
         .force("contain", containmentForce());
 
-    const link = container.append("g").selectAll("line").data(links).enter().append("line")
+    const link = container.append("g").selectAll("line").data(links, linkKey).enter().append("line")
         .attr("class", "link")
         .attr("stroke", d => d3.interpolateReds(Math.min((d.weight / 70) ** 1.2, 1)))
         .attr("stroke-width", d => edgeScale(d.weight))
         .attr("stroke-opacity", 0.6)
         .on("mouseover", async (e, d) => {            
             hoveredLinkData = d;
-            hoveredLinkElement = e;
             showTooltip(d);
             updatePreviewTimer("off");
             if (e.shiftKey) {
