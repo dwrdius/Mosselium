@@ -158,6 +158,8 @@ function linkKey(d) {
     return `${s}|${t}`;
 }
 
+let UndoStack = [];
+
 function removeOrphanNodes() {
     const connected = new Set();
 
@@ -167,6 +169,16 @@ function removeOrphanNodes() {
         connected.add(s);
         connected.add(t);
     });
+
+    if (UndoStack.size == 0) {
+        UndoStack.push({
+            Action : "Deletion",
+            AffectedNodes : new Set()
+        });
+    }
+
+    const deletedOrphans = currentNodes.filter(n => !connected.has(n.id));
+    deletedOrphans.forEach(n => UndoStack.at(-1).AffectedNodes.add(n.id))
 
     currentNodes = currentNodes.filter(n => connected.has(n.id));
 
@@ -178,6 +190,11 @@ function removeOrphanNodes() {
 // deletion
 window.addEventListener("keydown", (e) => {
     if (selectedNodeIds.size > 0 && (e.key == "Backspace" || e.key == "Delete")) {
+        UndoStack.push({
+            Action : "Deletion",
+            AffectedNodes : new Set(selectedNodeIds)
+        });
+        
         // if (hoveredLinkData 
         // && selectedNodeIds.has(hoveredLinkData.source.id || hoveredLinkData.source)
         // && selectedNodeIds.has(hoveredLinkData.target.id || hoveredLinkData.target)) {
@@ -214,6 +231,8 @@ window.addEventListener("keydown", (e) => {
         
         // Reset visual styles for remaining elements
         setTimeout(() => resetGraph(false), THEME.speedFast + 10);
+
+        console.log(UndoStack);
     }
 });
 
