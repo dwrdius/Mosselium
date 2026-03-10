@@ -1,13 +1,28 @@
-const maxPreviewWidth = 0.7;
-const resizeHandle = previewWindow.querySelector(".preview-resize-handle");
+import { getProcessedHtml } from "./parsingUtils.js";
+import { updateTooltipPosition } from "./tooltips.js";
+
+let isPinnedPreview = false;
+let previewOn = false;
+let previewSide = "left";
+let previewTimeout = null;
+let currentPreview = null;
+let pinnedPreview = null;
 let resizing = false;
+
+const PREVIEW_HIDE_DELAY = 400;
+const maxPreviewWidth = 0.7;
+
+const previewWindow = document.getElementById("preview-window");
+const previewScale = document.getElementById("previewScale");
+const previewFrame = document.getElementById("preview-frame");
+const resizeHandle = previewWindow.querySelector(".preview-resize-handle");
 
 previewScale.addEventListener("input", () => {
     document.documentElement.style
         .setProperty("--preview-scale", previewScale.value);
 });
 
-function clearPreview() {
+export function clearPreview() {
     isPinnedPreview = false;
     previewWindow.classList.remove("visible");
     previewWindow.classList.remove("pinned");
@@ -17,7 +32,7 @@ function clearPreview() {
     previewOn = false;  
 }
 
-async function showPreview(d) {
+export async function showPreview(d) {
     const oldSide = previewWindow.dataset.side;
     if (isPinnedPreview) {
         if (pinnedPreview == null) {
@@ -32,6 +47,13 @@ async function showPreview(d) {
 
     const fixedHtml = await getProcessedHtml(d.fileName);
     previewFrame.srcdoc = fixedHtml;
+
+    const handleTransitionEnd = (e) => {
+        if (e.target !== previewWindow) return;
+        
+        updateTooltipPosition();
+        previewWindow.removeEventListener("transitionend", handleTransitionEnd);
+    };
 
     if (oldSide && oldSide !== previewSide && previewOn) {
         previewWindow.classList.remove("visible");
@@ -54,8 +76,8 @@ async function showPreview(d) {
 
         requestAnimationFrame(() => {
             previewWindow.classList.add("visible");
+            previewWindow.addEventListener("transitionend", handleTransitionEnd);
         });
-
     } 
     else if (!previewOn) {
         previewWindow.style.transition = "none";
@@ -67,6 +89,7 @@ async function showPreview(d) {
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 previewWindow.classList.add("visible");
+                previewWindow.addEventListener("transitionend", handleTransitionEnd);
             });
         });
     }
@@ -115,7 +138,7 @@ document.addEventListener("mouseup", () => {
     previewWindow.style.pointerEvents = "";
 });
 
-function handleMousePreviewSide(d, mousePageX, maxPos, backlashBuffer = 50, cursorGap = 50) {
+export function handleMousePreviewSide(d, mousePageX, maxPos, backlashBuffer = 50, cursorGap = 50) {
     if (!isPinnedPreview) {
         const effectiveMousePos = mousePageX + cursorGap + previewWindow.offsetWidth;
         if (previewSide === "right" && effectiveMousePos > maxPos) {
@@ -129,15 +152,15 @@ function handleMousePreviewSide(d, mousePageX, maxPos, backlashBuffer = 50, curs
     }
 }
 
-function getPreviewSide() {
+export function getPreviewSide() {
     return previewWindow.dataset.side;
 }
 
-function getPreviewWidth() {
+export function getPreviewWidth() {
     return previewWindow.offsetWidth;
 }
 
-function getPreviewInnerCoord() {
+export function getPreviewInnerCoord() {
     if (getPreviewSide() == "left") {
         return previewWindow.getBoundingClientRect().right;
     }
@@ -146,11 +169,11 @@ function getPreviewInnerCoord() {
     }
 }
 
-function disablePreviewPointerEvents() {
+export function disablePreviewPointerEvents() {
     previewWindow.style.pointerEvents = "none";
 }
 
-function updatePreviewTimer(state) {
+export function updatePreviewTimer(state) {
     if (isPinnedPreview) return;
 
     if (state === "on") {
@@ -166,7 +189,7 @@ function updatePreviewTimer(state) {
     }
 }
 
-function enablePreview(d, enablePin = false) {
+export function enablePreview(d, enablePin = false) {
     if (!isPinnedPreview) {
         if (enablePin) {
             isPinnedPreview = true;

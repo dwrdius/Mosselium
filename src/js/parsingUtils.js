@@ -1,4 +1,6 @@
-function parseMoss(htmlText) {
+import { fileMap, blobUrlMap } from "./mosselium.js";
+
+export function parseMoss(htmlText) {
     const doc = new DOMParser().parseFromString(htmlText, "text/html");
     const links = [];
     doc.querySelectorAll("table tr").forEach(row => {
@@ -19,7 +21,7 @@ function parseMoss(htmlText) {
     return links;
 }
 
-function normalizeHTMLHeaders(html) {
+export function normalizeHTMLHeaders(html) {
     let output = html;
 
     // Ensure DOCTYPE
@@ -38,7 +40,7 @@ function normalizeHTMLHeaders(html) {
     return output;
 }
 
-async function getProcessedHtml(fileName) {
+export async function getProcessedHtml(fileName) {
     const file = fileMap[fileName];
     if (!file) return "";
     let html = await file.text();

@@ -1,4 +1,42 @@
+import { 
+    clearPreview, 
+    showPreview, 
+    handleMousePreviewSide, 
+    disablePreviewPointerEvents, 
+    updatePreviewTimer, 
+    enablePreview 
+} from "./previews.js";
+import { showTooltip, hideTooltip, updateTooltipPosition } from "./tooltips.js";
+import { THEME, audioBoom, audioRoll, boomChance } from "./globals.js";
+import { parseMoss, getProcessedHtml, normalizeHTMLHeaders } from "./parsingUtils.js";
+
+export let fileMap = {}, blobUrlMap = {};
+let currentLinks = [], currentNodes = []
+let allLinks = [], allNodes = [];
+let colorScale = d3.scaleLinear().domain([0, 0.5, 1]).range([THEME.gradientMin, THEME.gradientMid, THEME.gradientMax]);
+let simulation, svg, container, zoom;
+let selectedNodeIds = new Set();
+let selectedLink = null;
+let recenterOnClick = true;
+let hoveredLinkData = null;
+
+const isMac = /Mac/i.test(navigator.userAgent);
+const cmdKeyName = isMac ? "⌘ Command" : "Ctrl";
+const edgeScale = d3.scalePow().exponent(THEME.power).domain([0, 100]).range([2, 20]);
+
+let folderInput, uploadBtn, resetBtn, select, autoRecenterToggle;
+
+function initDOMReferences() {
+    folderInput = document.getElementById("folderInput");
+    uploadBtn = document.getElementById("uploadBtn");
+    resetBtn = document.getElementById("resetBtn");
+    select = document.getElementById("topLinks");
+    autoRecenterToggle = document.getElementById("autoRecenter");
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+    initDOMReferences();
+
     if (folderInput) folderInput.value = '';
     
     document.getElementById('shortcuts-info').innerHTML = `
@@ -19,7 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .on("zoom", (e) => {
             container.attr("transform", e.transform);
             if (e.sourceEvent) {
-                document.getElementById("topLinks").value = "";
+                select.value = "";
             }
         });
     svg.call(zoom);
@@ -79,10 +117,16 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
         const text = await readableFile.text();
-        currentLinks = parseMoss(text);
-        generateGraph(currentLinks);        
+        allLinks = parseMoss(text);
+        currentLinks = allLinks;
+        generateGraph(currentLinks);
         folderInput.value = '';
     };   
+
+    autoRecenterToggle.addEventListener("change", () => {
+        recenterOnClick = autoRecenterToggle.checked;
+        console.log(recenterOnClick);
+    });
 });
 
 window.addEventListener("keydown", (e) => {
@@ -91,13 +135,109 @@ window.addEventListener("keydown", (e) => {
     }
 });
 
-window.addEventListener('resize', () => {
-    if (simulation) simulation.force("center", d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2)).alpha(0.1).restart();
+function refreshDropdown() {
+    const select = document.getElementById("topLinks");
+    select.innerHTML = '<option value="">-- Jump to Match --</option>';
+    
+    currentLinks
+        .sort((a, b) => b.weight - a.weight)
+        .forEach((l, i) => {
+            const opt = document.createElement("option");
+            opt.value = i;
+            // Access .id because D3 converts strings to objects: {id: "name", x: 0, y: 0}
+            const sName = l.source.id || l.source;
+            const tName = l.target.id || l.target;
+            opt.text = `${Math.round(l.weight)}%: ${sName} - ${tName}`;
+            select.appendChild(opt);
+        });
+}
+
+function linkKey(d) {
+    const s = d.source.id || d.source;
+    const t = d.target.id || d.target;
+    return `${s}|${t}`;
+}
+
+let UndoStack = [];
+
+function removeOrphanNodes() {
+    const connected = new Set();
+
+    currentLinks.forEach(l => {
+        const s = l.source.id || l.source;
+        const t = l.target.id || l.target;
+        connected.add(s);
+        connected.add(t);
+    });
+
+    if (UndoStack.size == 0) {
+        UndoStack.push({
+            Action : "Deletion",
+            AffectedNodes : new Set()
+        });
+    }
+
+    const deletedOrphans = currentNodes.filter(n => !connected.has(n.id));
+    deletedOrphans.forEach(n => UndoStack.at(-1).AffectedNodes.add(n.id))
+
+    currentNodes = currentNodes.filter(n => connected.has(n.id));
+
+    simulation.nodes(currentNodes);
+    simulation.force("link").links(currentLinks);
+    simulation.alpha(0.3).restart();
+}
+
+// deletion
+window.addEventListener("keydown", (e) => {
+    if (selectedNodeIds.size > 0 && (e.key == "Backspace" || e.key == "Delete")) {
+        UndoStack.push({
+            Action : "Deletion",
+            AffectedNodes : new Set(selectedNodeIds)
+        });
+        
+        // if (hoveredLinkData 
+        // && selectedNodeIds.has(hoveredLinkData.source.id || hoveredLinkData.source)
+        // && selectedNodeIds.has(hoveredLinkData.target.id || hoveredLinkData.target)) {
+        //     hideTooltip();
+        // }
+        
+        currentNodes = currentNodes.filter(n => !selectedNodeIds.has(n.id));
+
+        currentLinks = currentLinks.filter(l => {
+            const s = l.source.id || l.source;
+            const t = l.target.id || l.target;
+            return !selectedNodeIds.has(s) && !selectedNodeIds.has(t);
+        });
+
+        simulation.nodes(currentNodes);
+        simulation.force("link").links(currentLinks);
+        simulation.alpha(0.3).restart();
+
+        removeOrphanNodes();
+        
+        // Update the SVG Elements
+        const nodeSel = container.selectAll(".node").data(currentNodes, d => d.id);
+        nodeSel.exit().transition().duration(THEME.speedFast).attr("r", 0).remove();
+
+        const labelSel = container.selectAll(".label").data(currentNodes, d => d.id);
+        labelSel.exit().remove();
+
+        const linkSel = container.selectAll(".link").data(currentLinks, linkKey);
+        linkSel.exit().transition().duration(THEME.speedFast).attr("stroke-opacity", 0).remove().on("end", hideTooltip());
+
+        refreshDropdown();
+        clearPreview();
+        selectedNodeIds.clear();
+        
+        // Reset visual styles for remaining elements
+        setTimeout(() => resetGraph(false), THEME.speedFast + 10);
+
+        console.log(UndoStack);
+    }
 });
 
-autoRecenterToggle.addEventListener("change", () => {
-    recenterOnClick = autoRecenterToggle.checked;
-    console.log(recenterOnClick);
+window.addEventListener('resize', () => {
+    if (simulation) simulation.force("center", d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2)).alpha(0.1).restart();
 });
 
 function containmentForce() {
@@ -123,24 +263,20 @@ function containmentForce() {
 
 function generateGraph(links) {
     container.selectAll("*").remove();
-    const tooltip = d3.select("#tooltip");
-    
+
     const nodesMap = {};
+    let counter = 0;
     links.forEach(l => {
         [l.source, l.target].forEach(id => {
             if (!nodesMap[id]) nodesMap[id] = { id, weightScore: 0 };
             nodesMap[id].weightScore += Math.pow(l.weight, THEME.power);
         });
+        counter++;
     });
-    currentNodes = Object.values(nodesMap);
+    allNodes = Object.values(nodesMap);
+    currentNodes = allNodes;
 
-    select.innerHTML = '<option value="">-- Jump to Match --</option>';
-    links.sort((a,b) => b.weight - a.weight).forEach((l, i) => {
-        const opt = document.createElement("option");
-        opt.value = i;
-        opt.text = `${Math.round(l.weight)}%: ${l.source} - ${l.target}`;
-        select.appendChild(opt);
-    });
+    refreshDropdown()
 
     const maxWeight = d3.max(currentNodes, d => d.weightScore);
     colorScale = d3.scaleLinear().domain([0, maxWeight*0.5, maxWeight]).range([THEME.gradientMin, THEME.gradientMid, THEME.gradientMax]);
@@ -152,70 +288,32 @@ function generateGraph(links) {
         .force("collision", d3.forceCollide().radius(d => 25 + (d.weightScore / maxWeight) * 20))
         .force("contain", containmentForce());
 
-    const link = container.append("g").selectAll("line").data(links).enter().append("line")
+    const link = container.append("g").selectAll("line").data(links, linkKey).enter().append("line")
         .attr("class", "link")
         .attr("stroke", d => d3.interpolateReds(Math.min((d.weight / 70) ** 1.2, 1)))
         .attr("stroke-width", d => edgeScale(d.weight))
         .attr("stroke-opacity", 0.6)
         .on("mouseover", async (e, d) => {            
             hoveredLinkData = d;
-            hoveredLinkElement = e;
-
-            tooltip.style("visibility", "visible").html(`Similarity: <strong>${Math.round(d.weight)}%</strong>`);
-
+            showTooltip(d);
             updatePreviewTimer("off");
-
             if (e.shiftKey) {
                 enablePreview(d);
             }
         })
         .on("mouseout", () => { 
             hoveredLinkData = null; 
-            tooltip.style("visibility", "hidden"); 
-            
+            hideTooltip();
             updatePreviewTimer("on");
         })
         .on("mousemove", function(e, d) {
-            const tooltipNode = tooltip.node();
-            const tooltipHeight = tooltipNode.offsetHeight;
-            const tooltipWidth = tooltipNode.offsetWidth;
-            
             const tooltipCursorGap = 10;
             const tooltipEdgeGap = 20;
             const cursorThreshold = 50;
             const backlashBuffer = 50;
 
             handleMousePreviewSide(d, e.pageX, window.innerWidth, backlashBuffer, cursorThreshold);
-
-            const spaceAbove = e.pageY;
-            if (tooltipVertical === "top" && spaceAbove < (tooltipHeight + tooltipCursorGap + tooltipEdgeGap)) {
-                tooltipVertical = "bottom";
-            } 
-            else if (tooltipVertical === "bottom" && spaceAbove > (tooltipHeight + tooltipCursorGap + backlashBuffer)) {
-                tooltipVertical = "top";
-            }
-
-            const spaceRight = (getPreviewSide() == "left") 
-                                    ? window.innerWidth - e.pageX 
-                                    : getPreviewInnerCoord() - e.pageX;
-            if (tooltipSide === "right" && spaceRight < (tooltipWidth + tooltipCursorGap + tooltipEdgeGap)) {
-                tooltipSide = "left";
-            } 
-            else if (tooltipSide === "left" && spaceRight > (tooltipWidth + tooltipCursorGap + backlashBuffer)) {
-                tooltipSide = "right";
-            }
-
-            const vert = (tooltipVertical === "top") 
-                ? (e.pageY - tooltipHeight - tooltipCursorGap) 
-                : (e.pageY + tooltipHeight + tooltipCursorGap);
-                
-            const horiz = (tooltipSide === "right") 
-                ? (e.pageX + tooltipCursorGap) 
-                : (e.pageX - tooltipWidth - tooltipCursorGap);
-
-            tooltip
-                .style("top", `${vert}px`)
-                .style("left", `${horiz}px`);
+            updateTooltipPosition(e.pageX, e.pageY, tooltipCursorGap, tooltipEdgeGap, backlashBuffer);
         })
         .on("click", async (e, d) => {
             e.stopPropagation();
