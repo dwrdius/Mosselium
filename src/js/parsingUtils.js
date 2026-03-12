@@ -1,5 +1,5 @@
 import { fileMap, blobUrlMap } from "./mosselium.js";
-import { THEME } from "./globals.js";
+import { THEME, colorScale } from "./globals.js";
 
 export function parseMoss(htmlText) {
     const doc = new DOMParser().parseFromString(htmlText, "text/html");
@@ -22,36 +22,47 @@ export function parseMoss(htmlText) {
     return links;
 }
 
-// function recalculateAttributes(nodes) {
-//     nodes.forEach(n => {
-//         // size ∝ # of critical links
-//         // color ∝ avg weight of exponentiated critical links
-//         // charge ∝ defaultCharge - (flex * nodeMax / trueMax)
+function recalculateAttributes(nodes) {
+    let maxSimilarity_allNodes = 0;
+    nodes.forEach(n => {
+        if (n.maxSimilarity > maxSimilarity_allNodes) {
+            maxSimilarity_allNodes = n.maxSimilarity;
+        }
+    });
 
-//         const radiusFlex = THEME.defaultNodeRadius_max - THEME.defaultNodeRadius_min;
+    nodes.forEach(n => {
+        // size ∝ # of critical links
+        // color ∝ avg weight of exponentiated critical links
+        // charge ∝ (-) defaultCharge + (flex * nodeMax / trueMax)
+            // pow?
 
-//         n.radiusAttr = THEME.defaultNodeRadius_min + (radiusFlex) * n.degreeAboveThreshold / ???;
-//         if (n.degreeAboveThreshold > 0) {
-//             n.colorAttr = colorScale(n.sumAboveThresh.pow / n.degreeAboveThreshold);
-//         }
-//         else {
-//             n.colorAttr = colorScale(n.sumAboveThresh.raw / n.degree);
-//         }
-//         n.chargeAttr = 
-        
-//         // { 
-//         //     id, 
-//         //     weightScore: 0, // deprecated soon
-            
-//         //     maxSimilarity: {raw: 0, pow: 0},
-//         //     sumTotSimilarity: {raw: 0, pow: 0},
-//         //     degree: 0, 
-            
-//         //     sumAboveThresh: {raw: 0, pow: 0},
-//         //     degreeAboveThreshold: 0,
-//         // }
-//     });
-// }
+        n.radiusAttr = THEME.defaultNodeRadius_min 
+                        + (THEME.radiusFlex) * n.degreeAboveThreshold 
+                        / THEME.degreeToNodeSideScalingFactor;
+
+        // if (n.degreeAboveThreshold > 0) {
+        //     n.colorAttr = colorScale(Math.min(1, n.sumAboveThresh.pow / n.degreeAboveThreshold));
+        // }
+        // else {
+            // n.colorAttr = colorScale(Math.min(1, n.sumSimilarity.raw / n.degree / 100));
+        // }
+
+        n.colorAttr = colorScale(Math.pow(Math.min(1, n.maxSimilarity / THEME.maxReasonableSimilarity), THEME.similarityExponent));
+
+        n.chargeAttr = THEME.defaultNodeCharge 
+                        + THEME.nodeChargeFlex 
+                        * Math.pow(
+                            (n.maxSimilarity / maxSimilarity_allNodes), 
+                            THEME.similarityExponent
+                          );
+
+        // n.colorAttr = colorScale((400 + n.chargeAttr) / 100);
+    });
+
+    console.log(nodes);
+
+    return nodes;
+}
 
 export function getNodesFromLinks(links) {
     const nodesMap = {};
@@ -62,8 +73,8 @@ export function getNodesFromLinks(links) {
                                     id, 
                                     weightScore: 0, // deprecated soon
                                     
-                                    maxSimilarity: {raw: 0, pow: 0},
-                                    sumTotSimilarity: {raw: 0, pow: 0},
+                                    maxSimilarity: 0,
+                                    sumSimilarity: {raw: 0, pow: 0},
                                     degree: 0, 
                                     
                                     sumAboveThresh: {raw: 0, pow: 0},
@@ -76,25 +87,24 @@ export function getNodesFromLinks(links) {
             }
             nodesMap[id].weightScore += Math.pow(l.weight, THEME.similarityExponent);
             
-            if (nodesMap[id].maxSimilarity.raw < l.weight) {
-                nodesMap[id].maxSimilarity.raw = l.weight;
-                nodesMap[id].maxSimilarity.pow = Math.pow(l.weight/100, THEME.similarityExponent);
+            if (nodesMap[id].maxSimilarity < l.weight) {
+                nodesMap[id].maxSimilarity = l.weight;
             }
             nodesMap[id].sumSimilarity.raw += l.weight;
-            nodesMap[id].sumSimilarity.pow += Math.pow(l.weight/100, THEME.similarityExponent);
+            nodesMap[id].sumSimilarity.pow += Math.pow(l.weight/THEME.maxReasonableSimilarity, THEME.similarityExponent);
             nodesMap[id].degree++;
 
             if (l.weight > THEME.criticalSimilarityThreshold) {
                 nodesMap[id].sumAboveThresh.raw += l.weight;
-                nodesMap[id].sumAboveThresh.pow += Math.pow(l.weight/100, THEME.similarityExponent);
+                nodesMap[id].sumAboveThresh.pow += Math.pow(l.weight/THEME.maxReasonableSimilarity, THEME.similarityExponent);
                 nodesMap[id].degreeAboveThreshold++;
             }
         });
     });
 
-    // return recalcuateAttributes(Object.values(nodesMap));
+    return recalculateAttributes(Object.values(nodesMap));
 
-    return Object.values(nodesMap);
+    // return Object.values(nodesMap);
 }
 
 export function normalizeHTMLHeaders(html) {

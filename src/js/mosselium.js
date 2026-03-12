@@ -8,14 +8,14 @@ import {
 } from "./previews.js";
 import { showTooltip, hideTooltip, updateTooltipPosition } from "./tooltips.js";
 import { THEME, audioBoom, audioRoll, boomChance } from "./globals.js";
-import { parseMoss, getProcessedHtml, normalizeHTMLHeaders } from "./parsingUtils.js";
+import { parseMoss, getNodesFromLinks, getProcessedHtml, normalizeHTMLHeaders } from "./parsingUtils.js";
 
 export let fileMap = {}, blobUrlMap = {};
 let currentLinks = [], currentNodes = []
 let allLinks = [], allNodes = [];
-let colorScale = d3.scaleLinear().domain([0, 0.5, 1]).range([THEME.gradientMin, THEME.gradientMid, THEME.gradientMax]);
 let simulation, svg, container, zoom;
 let selectedNodeIds = new Set();
+let removedNodeIds = new Set();
 let selectedLink = null;
 let recenterOnClick = true;
 let hoveredLinkData = null;
@@ -27,6 +27,7 @@ const cmdKeyName = isMac ? "⌘ Command" : "Ctrl";
 const edgeScale = d3.scalePow().exponent(NodeWeightPower).domain([0, 100]).range([2, 20]);
 
 let folderInput, uploadBtn, resetBtn, select, autoRecenterToggle;
+let linkLayer, nodeLayer, labelLayer;
 
 function initDOMReferences() {
     folderInput = document.getElementById("folderInput");
@@ -34,6 +35,12 @@ function initDOMReferences() {
     resetBtn = document.getElementById("resetBtn");
     select = document.getElementById("topLinks");
     autoRecenterToggle = document.getElementById("autoRecenter");
+}
+
+function initSVGComponents() {
+    linkLayer = container.append("g").attr("class", "links");
+    nodeLayer = container.append("g").attr("class", "nodes");
+    labelLayer = container.append("g").attr("class", "labels");
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -51,6 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     svg = d3.select("#graph");
     container = svg.append("g");
+    initSVGComponents();
 
     setupGradients();
 
@@ -216,16 +224,20 @@ window.addEventListener("keydown", (e) => {
         simulation.alpha(0.3).restart();
 
         removeOrphanNodes();
+
+        UndoStack.at(-1).AffectedNodes.forEach(n => removedNodeIds.add(n));
         
+        updateGraph();
+
         // Update the SVG Elements
-        const nodeSel = container.selectAll(".node").data(currentNodes, d => d.id);
-        nodeSel.exit().transition().duration(THEME.speedFast).attr("r", 0).remove();
+        // const nodeSel = container.selectAll(".node").data(currentNodes, d => d.id);
+        // nodeSel.exit().transition().duration(THEME.speedFast).attr("r", 0).remove();
 
-        const labelSel = container.selectAll(".label").data(currentNodes, d => d.id);
-        labelSel.exit().remove();
+        // const labelSel = container.selectAll(".label").data(currentNodes, d => d.id);
+        // labelSel.exit().remove();
 
-        const linkSel = container.selectAll(".link").data(currentLinks, linkKey);
-        linkSel.exit().transition().duration(THEME.speedFast).attr("stroke-opacity", 0).remove().on("end", hideTooltip());
+        // const linkSel = container.selectAll(".link").data(currentLinks, linkKey);
+        // linkSel.exit().transition().duration(THEME.speedFast).attr("stroke-opacity", 0).remove().on("end", hideTooltip());
 
         refreshDropdown();
         clearPreview();
@@ -238,6 +250,89 @@ window.addEventListener("keydown", (e) => {
     }
 });
 
+function updateGraph() {
+    const link = linkLayer
+        .selectAll(".link")
+        .data(currentLinks, linkKey)
+        .join(
+            enter => enter.append("line")
+                .attr("class", "link")
+                .attr("stroke", d => d3.interpolateReds(Math.min((d.weight / 70) ** 1.2, 1)))
+                .attr("stroke-width", d => edgeScale(d.weight))
+                .attr("stroke-opacity", 0.6)
+                .on("mouseover", handleLinkMouseOver)
+                .on("mouseout", handleLinkMouseOut)
+                .on("mousemove", handleLinkMouseMove)
+                .on("click", handleLinkClick),
+
+            update => update,
+
+            exit => exit.remove()
+        );
+
+    const node = nodeLayer
+        .selectAll(".node")
+        .data(currentNodes, d => d.id)
+        .join(
+            enter => enter.append("circle")
+                .attr("class", "node")
+                .attr("r", d => d.radiusAttr)
+                .attr("fill", d => d.colorAttr)
+                .attr("stroke", THEME.nodeBorderColor)
+                .on("click", (e, d) => {
+                    clearPreview();
+                    select.value = "";
+                    e.stopPropagation();
+                    handleNodeClick(e, d);
+                })
+                .call(d3.drag()
+                    .on("start", dragStarted)
+                    .on("drag", dragged)
+                    .on("end", dragEnded)
+                ),
+
+            update => update,
+
+            exit => exit.remove()
+        );
+
+    const label = labelLayer
+        .selectAll(".label")
+        .data(currentNodes, d => d.id)
+        .join(
+            enter => enter.append("text")
+                .attr("class", "label")
+                .attr("dy", d => -(d.radiusAttr + 5))
+                .attr("text-anchor", "middle")
+                .text(d => d.id.split(/[\\/]/).pop()),
+
+            update => update,
+
+            exit => exit.remove()
+        );
+
+    simulation.nodes(currentNodes);
+    simulation.force("link").links(currentLinks);
+    simulation.alphaTarget(0.5).restart();
+    setTimeout(() => simulation.alphaTarget(0), 500);
+
+    simulation.on("tick", () => {
+        link
+            .attr("x1", d => d.source.x)
+            .attr("y1", d => d.source.y)
+            .attr("x2", d => d.target.x)
+            .attr("y2", d => d.target.y);
+
+        node
+            .attr("cx", d => d.x)
+            .attr("cy", d => d.y);
+
+        label
+            .attr("x", d => d.x)
+            .attr("y", d => d.y);
+    });
+}
+
 window.addEventListener("keydown", (e) => {
     if (UndoStack.length > 0 && e.key == "z" && (e.ctrlKey || e.metaKey)) {
         const reversion = UndoStack.at(-1);
@@ -247,10 +342,15 @@ window.addEventListener("keydown", (e) => {
             case "Deletion":
                 const returningNodes = allNodes.filter(n => reversion.AffectedNodes.has(n.id));
         
+                reversion.AffectedNodes.forEach(n => removedNodeIds.delete(n));
+                
                 const returningLinks = allLinks.filter(l => {
                     const s = l.source.id || l.source;
                     const t = l.target.id || l.target;
-                    return reversion.AffectedNodes.has(s) && reversion.AffectedNodes.has(t);
+                    return  !(removedNodeIds.has(s) 
+                                || removedNodeIds.has(t))
+                            && (reversion.AffectedNodes.has(s)
+                                || reversion.AffectedNodes.has(t));
                 });
                 console.log("returning: ", returningNodes);
                 console.log(".          ", returningLinks);
@@ -258,21 +358,11 @@ window.addEventListener("keydown", (e) => {
                 returningNodes.forEach(n => currentNodes.push(n));
                 returningLinks.forEach(l => currentLinks.push(l));
 
-                const nodeSel = container.selectAll(".node").data(currentNodes, d => d.id);
-                nodeSel.enter();
-                const labelSel = container.selectAll(".label").data(currentNodes, d => d.id);
-                labelSel.enter();
+                updateGraph();
 
-                const linkSel = container.selectAll(".link").data(currentLinks, linkKey);
-                linkSel.enter();
-
-                simulation.nodes(currentNodes);
-                simulation.force("link").links(currentLinks);
-                simulation.alpha(0.3).restart();
                 refreshDropdown();
                 clearPreview();
                 selectedNodeIds.clear();
-                alert("you got fooled lmao xd frfr");
                 break;
             default:
                 console.log("invalid undo of: ", reversion);
@@ -307,94 +397,119 @@ function containmentForce() {
     };
 }
 
+async function handleLinkMouseOver(e, d) {
+    hoveredLinkData = d;
+    showTooltip(d);
+    updatePreviewTimer("off");
+    if (e.shiftKey) {
+        enablePreview(d);
+    }
+}
+
+function handleLinkMouseOut() {
+    hoveredLinkData = null; 
+    hideTooltip();
+    updatePreviewTimer("on");
+}
+
+function handleLinkMouseMove(e, d) {
+    const tooltipCursorGap = 10;
+    const tooltipEdgeGap = 20;
+    const cursorThreshold = 50;
+    const backlashBuffer = 50;
+
+    handleMousePreviewSide(d, e.pageX, window.innerWidth, backlashBuffer, cursorThreshold);
+    updateTooltipPosition(e.pageX, e.pageY, tooltipCursorGap, tooltipEdgeGap, backlashBuffer);
+}
+
+async function handleLinkClick(e, d) {
+    e.stopPropagation();
+    
+    boom();
+    
+    if (e.shiftKey) {
+        enablePreview(d, true);
+    }
+    else {
+        const html = await getProcessedHtml(d.fileName);
+        const win = window.open("", "_blank");
+        win.document.write(html);
+    }
+}
+
 function generateGraph(links) {
     container.selectAll("*").remove();
+    initSVGComponents();
 
-    const nodesMap = {};
-    let counter = 0;
-    links.forEach(l => {
-        [l.source, l.target].forEach(id => {
-            if (!nodesMap[id]) nodesMap[id] = { id, weightScore: 0 };
-            nodesMap[id].weightScore += Math.pow(l.weight, NodeWeightPower);
-        });
-        counter++;
-    });
-    allNodes = Object.values(nodesMap);
+    allNodes = getNodesFromLinks(links);
     currentNodes = allNodes;
+
+    allLinks = links;
+    currentLinks = allLinks;
 
     refreshDropdown()
 
-    const maxWeight = d3.max(currentNodes, d => d.weightScore);
-    colorScale = d3.scaleLinear().domain([0, maxWeight*0.5, maxWeight]).range([THEME.gradientMin, THEME.gradientMid, THEME.gradientMax]);
+    // const maxWeight = d3.max(currentNodes, d => d.weightScore);
+    // colorScale = d3.scaleLinear().domain([0, maxWeight*0.5, maxWeight]).range([THEME.gradientMin, THEME.gradientMid, THEME.gradientMax]);
 
     simulation = d3.forceSimulation(currentNodes)
         .force("link", d3.forceLink(links).id(d => d.id).distance(150))
-        .force("charge", d3.forceManyBody().strength(-400))
+        .force("charge", d3.forceManyBody().strength(d => d.chargeAttr)) 
         .force("center", d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2))
-        .force("collision", d3.forceCollide().radius(d => 25 + (d.weightScore / maxWeight) * 20))
+        .force("collision", d3.forceCollide().radius(d => d.radiusAttr + 2)) 
         .force("contain", containmentForce());
 
-    const link = container.append("g").selectAll("line").data(links, linkKey).enter().append("line")
-        .attr("class", "link")
-        .attr("stroke", d => d3.interpolateReds(Math.min((d.weight / 70) ** 1.2, 1)))
-        .attr("stroke-width", d => edgeScale(d.weight))
-        .attr("stroke-opacity", 0.6)
-        .on("mouseover", async (e, d) => {            
-            hoveredLinkData = d;
-            showTooltip(d);
-            updatePreviewTimer("off");
-            if (e.shiftKey) {
-                enablePreview(d);
-            }
-        })
-        .on("mouseout", () => { 
-            hoveredLinkData = null; 
-            hideTooltip();
-            updatePreviewTimer("on");
-        })
-        .on("mousemove", function(e, d) {
-            const tooltipCursorGap = 10;
-            const tooltipEdgeGap = 20;
-            const cursorThreshold = 50;
-            const backlashBuffer = 50;
+    updateGraph();
 
-            handleMousePreviewSide(d, e.pageX, window.innerWidth, backlashBuffer, cursorThreshold);
-            updateTooltipPosition(e.pageX, e.pageY, tooltipCursorGap, tooltipEdgeGap, backlashBuffer);
-        })
-        .on("click", async (e, d) => {
-            e.stopPropagation();
-            boom();
-            if (e.shiftKey) {
-                enablePreview(d, true);
-            }
-            else {
-                const html = await getProcessedHtml(d.fileName);
-                const win = window.open("", "_blank");
-                win.document.write(html);
-            }
-        });
+    // const link = linkLayer.selectAll("line")
+    //     .data(links, linkKey)
+    //     .enter()
+    //     .append("line")
+    //     .attr("class", "link")
+    //     .attr("stroke", d => d3.interpolateReds(Math.min((d.weight / 70) ** 1.2, 1)))
+    //     .attr("stroke-width", d => edgeScale(d.weight))
+    //     .attr("stroke-opacity", 0.6)
+    //     .on("mouseover", handleLinkMouseOver)
+    //     .on("mouseout", handleLinkMouseOut)
+    //     .on("mousemove", handleLinkMouseMove)
+    //     .on("click", handleLinkClick);
 
-    const node = container.append("g").selectAll("circle").data(currentNodes).enter().append("circle")
-        .attr("class", "node")
-        .attr("r", d => 10 + (d.weightScore / maxWeight) * 30)
-        .attr("fill", d => colorScale(d.weightScore))
-        .on("click", (e, d) => {
-            clearPreview();
-            select.value = "";
-            e.stopPropagation();
-            handleNodeClick(e, d);
-        })
-        .call(d3.drag().on("start", dragStarted).on("drag", dragged).on("end", dragEnded));
+    // const node = nodeLayer.selectAll("circle")
+    //     .data(currentNodes, d => d.id)
+    //     .enter()
+    //     .append("circle")
+    //     .attr("class", "node")
+    //     .attr("r", d => d.radiusAttr)
+    //     .attr("fill", d => d.colorAttr)
+    //     .on("click", (e, d) => {
+    //         clearPreview();
+    //         select.value = "";
+    //         e.stopPropagation();
+    //         handleNodeClick(e, d);
+    //     })
+    //     .call(d3.drag()
+    //         .on("start", dragStarted)
+    //         .on("drag", dragged)
+    //         .on("end", dragEnded)
+    //     );
 
-    const label = container.append("g").selectAll("text").data(currentNodes).enter().append("text")
-        .attr("class", "label").attr("dy", -20).attr("text-anchor", "middle")
-        .text(d => d.id.split(/[\\/]/).pop());
+    // const label = labelLayer.selectAll("text")
+    //     .data(currentNodes, d => d.id)
+    //     .enter()
+    //     .append("text")
+    //     .attr("class", "label")
+    //     .attr("dy", d => -(d.radiusAttr + 5)) 
+    //     .attr("text-anchor", "middle")
+    //     .text(d => d.id.split(/[\\/]/).pop());
 
-    simulation.on("tick", () => {
-        link.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
-        node.attr("cx", d => d.x).attr("cy", d => d.y);
-        label.attr("x", d => d.x).attr("y", d => d.y);
-    });
+    // simulation.on("tick", () => {
+    //     link.attr("x1", d => d.source.x)
+    //         .attr("y1", d => d.source.y)
+    //         .attr("x2", d => d.target.x)
+    //         .attr("y2", d => d.target.y);
+    //     node.attr("cx", d => d.x).attr("cy", d => d.y);
+    //     label.attr("x", d => d.x).attr("y", d => d.y);
+    // });
 
     clearPreview();
     selectedNodeIds.clear();
@@ -402,6 +517,11 @@ function generateGraph(links) {
 }
 
 function handleNodeClick(e, d) {
+    console.log("Radius: ", d.radiusAttr);
+    console.log("Colour: ", d.colorAttr);
+    console.log("Charge: ", d.chargeAttr);
+    console.log("Above: ", d.sumAboveThresh);
+
     const isMod = isMac ? e.metaKey : e.ctrlKey;
     boom(); 
     if (isMod && selectedNodeIds.size > 0) {
@@ -459,7 +579,7 @@ function updateMultiSelection(recenter=false) {
     const adjNodeBorder = "#ccc";
     const extNodeBorder = "#333";
     nodeElements.each(d => {
-        const baseColor = colorScale(d.weightScore);
+        const baseColor = d.colorAttr;
         if (selectedNodeIds.has(d.id)) {
             nodeMap.set(d, {
                 "fill": baseColor,
@@ -524,14 +644,16 @@ function resetGraph(recenter=false) {
     if (recenter) svg.transition().duration(THEME.speedSlow).call(zoom.transform, d3.zoomIdentity);
     const edgeScale = d3.scalePow().exponent(NodeWeightPower).domain([0, 100]).range([2, 20]);
     
-    container.selectAll(".link").transition().duration(THEME.speedFast)
+    container.selectAll(".link")
+        .transition().duration(THEME.speedFast)
         .attr("stroke-opacity", 0.6)
         .attr("stroke-width", d => edgeScale(d.weight))
         .attr("pointer-events", "auto");
         
-    container.selectAll(".node").classed("selected", false).transition().duration(THEME.speedFast)
+    container.selectAll(".node").classed("selected", false)
+        .transition().duration(THEME.speedFast)
         .attr("opacity", 1)
-        .attr("fill", d => colorScale(d.weightScore))
+        .attr("fill", d => d.colorAttr)
         .attr("stroke", THEME.nodeBorderColor);
     
     document.getElementById("topLinks").value = "";

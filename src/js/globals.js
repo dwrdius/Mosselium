@@ -20,15 +20,20 @@ export const THEME = {
     bgColor: cssVars.getPropertyValue("--bg-color"),
     nodeBorderColor: cssVars.getPropertyValue("--node-border-color"),
 
-    defaultNodeRadius_min: 10,
-    defaultNodeRadius_max: 40,
+    defaultNodeRadius_min: 15,
+    radiusFlex: 20,
+    degreeToNodeSideScalingFactor: 5,
+
     defaultNodeCharge: -400,
     nodeChargeFlex: 100,
 
-    similarityExponent: 2.5,
-    criticalSimilarityThreshold: 35, // [XX]%
+    similarityExponent: 2,
+    criticalSimilarityThreshold: 20, // [XX]%
+    maxReasonableSimilarity: 50,
 };
 console.log(THEME);
+
+export const colorScale = d3.scaleLinear().domain([0, 0.5, 1]).range([THEME.gradientMin, THEME.gradientMid, THEME.gradientMax]);
 
 export var audioBoom = new Audio('audio/easteregg.mp3');
 export var audioRoll = new Audio('audio/music.mp3');
