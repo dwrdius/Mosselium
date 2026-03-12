@@ -20,9 +20,11 @@ let selectedLink = null;
 let recenterOnClick = true;
 let hoveredLinkData = null;
 
+const NodeWeightPower = 2.5
+
 const isMac = /Mac/i.test(navigator.userAgent);
 const cmdKeyName = isMac ? "⌘ Command" : "Ctrl";
-const edgeScale = d3.scalePow().exponent(THEME.power).domain([0, 100]).range([2, 20]);
+const edgeScale = d3.scalePow().exponent(NodeWeightPower).domain([0, 100]).range([2, 20]);
 
 let folderInput, uploadBtn, resetBtn, select, autoRecenterToggle;
 
@@ -236,6 +238,50 @@ window.addEventListener("keydown", (e) => {
     }
 });
 
+window.addEventListener("keydown", (e) => {
+    if (UndoStack.length > 0 && e.key == "z" && (e.ctrlKey || e.metaKey)) {
+        const reversion = UndoStack.at(-1);
+        UndoStack.pop();
+
+        switch (reversion.Action) {
+            case "Deletion":
+                const returningNodes = allNodes.filter(n => reversion.AffectedNodes.has(n.id));
+        
+                const returningLinks = allLinks.filter(l => {
+                    const s = l.source.id || l.source;
+                    const t = l.target.id || l.target;
+                    return reversion.AffectedNodes.has(s) && reversion.AffectedNodes.has(t);
+                });
+                console.log("returning: ", returningNodes);
+                console.log(".          ", returningLinks);
+
+                returningNodes.forEach(n => currentNodes.push(n));
+                returningLinks.forEach(l => currentLinks.push(l));
+
+                const nodeSel = container.selectAll(".node").data(currentNodes, d => d.id);
+                nodeSel.enter();
+                const labelSel = container.selectAll(".label").data(currentNodes, d => d.id);
+                labelSel.enter();
+
+                const linkSel = container.selectAll(".link").data(currentLinks, linkKey);
+                linkSel.enter();
+
+                simulation.nodes(currentNodes);
+                simulation.force("link").links(currentLinks);
+                simulation.alpha(0.3).restart();
+                refreshDropdown();
+                clearPreview();
+                selectedNodeIds.clear();
+                alert("you got fooled lmao xd frfr");
+                break;
+            default:
+                console.log("invalid undo of: ", reversion);
+        }
+
+    }
+});
+
+
 window.addEventListener('resize', () => {
     if (simulation) simulation.force("center", d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2)).alpha(0.1).restart();
 });
@@ -269,7 +315,7 @@ function generateGraph(links) {
     links.forEach(l => {
         [l.source, l.target].forEach(id => {
             if (!nodesMap[id]) nodesMap[id] = { id, weightScore: 0 };
-            nodesMap[id].weightScore += Math.pow(l.weight, THEME.power);
+            nodesMap[id].weightScore += Math.pow(l.weight, NodeWeightPower);
         });
         counter++;
     });
@@ -476,7 +522,7 @@ function updateMultiSelection(recenter=false) {
 
 function resetGraph(recenter=false) {
     if (recenter) svg.transition().duration(THEME.speedSlow).call(zoom.transform, d3.zoomIdentity);
-    const edgeScale = d3.scalePow().exponent(THEME.power).domain([0, 100]).range([2, 20]);
+    const edgeScale = d3.scalePow().exponent(NodeWeightPower).domain([0, 100]).range([2, 20]);
     
     container.selectAll(".link").transition().duration(THEME.speedFast)
         .attr("stroke-opacity", 0.6)

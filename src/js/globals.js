@@ -19,7 +19,14 @@ export const THEME = {
     previewScale: cssVars.getPropertyValue("--preview-scale"),
     bgColor: cssVars.getPropertyValue("--bg-color"),
     nodeBorderColor: cssVars.getPropertyValue("--node-border-color"),
-    power: 2.5,
+
+    defaultNodeRadius_min: 10,
+    defaultNodeRadius_max: 40,
+    defaultNodeCharge: -400,
+    nodeChargeFlex: 100,
+
+    similarityExponent: 2.5,
+    criticalSimilarityThreshold: 35, // [XX]%
 };
 console.log(THEME);
 
