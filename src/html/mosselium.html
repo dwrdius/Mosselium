@@ -15,15 +15,20 @@
         <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;" />
         <button id="uploadBtn">Upload MOSS Folder</button>
         <select id="topLinks"><option value="">-- Jump to Match --</option></select>
-        <div style="display: flex; flex-direction: column; gap: 15px; align-items: center;">
+        <div style="display: flex; flex-direction: column; gap: 15px; align-items: left;">
             <button id="resetBtn" style="font-size: 11px; border: none; color: #fff;">Reset View</button>
-            <div style="display: flex; gap: 15px; align-items: center; justify-content: center;">
-                <input type="range" id="previewScale" min="0.25" max="1" step="0.05" value="0.4" autocomplete="off" style="height: 14px; width: 50%;">
+            <div style="display: flex; gap: 15px; align-items: left; justify-content: left;">
                 <label for="previewScale" style="font-size: 11px; color: #fff;">Preview Scale:</label>
+                <input type="range" id="previewScale" min="0.25" max="1" step="0.05" value="0.4" autocomplete="off" style="height: 14px; width: 50%;">
             </div>
-            <div style="display: flex; gap: 15px; align-items: center; justify-content: center;">
-                <input type="checkbox" id="autoRecenter" checked autocomplete="off">
+            <div style="display: flex; gap: 15px; align-items: left; justify-content: left;">
+                <label for="similarityThreshold" style="font-size: 11px; color: #fff;">Min Similarity:</label>
+                <input type="range" id="similarityThreshold" min="10" max="30" step="1" value="10" autocomplete="off" style="height: 14px; width: 50%;">
+                <label for="similarityThreshold" style="font-size: 11px; color: #fff;"><span id="similarityThresholdValue">10</span>%</label>
+            </div>
+            <div style="display: flex; gap: 15px; align-items: left; justify-content: left;">
                 <label for="autoRecenter" style="font-size: 11px; color: #fff;">Automatic Recentering:</label>
+                <input type="checkbox" id="autoRecenter" checked autocomplete="off">
             </div>
         </div>
         <div id="shortcuts-info" style="font-size: 10px; color: #aaa; margin-top: 12px; line-height: 1.4; border-top: 1px solid #444; padding-top: 8px;"></div>

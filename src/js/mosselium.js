@@ -12,8 +12,10 @@ import { THEME, audioBoom, audioRoll, boomChance } from "./globals.js";
 import { parseMoss, getNodesFromLinks, getProcessedHtml, normalizeHTMLHeaders } from "./parsingUtils.js";
 
 export let fileMap = {}, blobUrlMap = {};
-let currentLinks = [], currentNodes = []
+let currentLinks = [], currentNodes = [];
+let visibleLinks = [], visibleNodes = [];
 let allLinks = [], allNodes = [];
+
 let simulation, svg, container, zoom;
 let selectedNodeIds = new Set();
 let removedNodeIds = new Set();
@@ -27,7 +29,7 @@ const isMac = /Mac/i.test(navigator.userAgent);
 const cmdKeyName = isMac ? "⌘ Command" : "Ctrl";
 const edgeScale = d3.scalePow().exponent(NodeWeightPower).domain([0, 100]).range([2, 20]);
 
-let folderInput, uploadBtn, resetBtn, select, autoRecenterToggle;
+let folderInput, uploadBtn, resetBtn, select, autoRecenterToggle, similarityThreshold;
 let linkLayer, nodeLayer, labelLayer;
 
 function initDOMReferences() {
@@ -36,6 +38,10 @@ function initDOMReferences() {
     resetBtn = document.getElementById("resetBtn");
     select = document.getElementById("topLinks");
     autoRecenterToggle = document.getElementById("autoRecenter");
+    similarityThreshold = document.getElementById("similarityThreshold");
+
+    similarityThreshold.value = 10;
+    document.getElementById("similarityThresholdValue").textContent = 10;
 }
 
 function initSVGComponents() {
@@ -136,11 +142,19 @@ document.addEventListener("DOMContentLoaded", () => {
         currentLinks = allLinks;
         generateGraph(currentLinks);
         folderInput.value = '';
-    };   
+    };
 
     autoRecenterToggle.addEventListener("change", () => {
         recenterOnClick = autoRecenterToggle.checked;
         console.log(recenterOnClick);
+    });
+
+    similarityThreshold.addEventListener("change", () => {
+        console.log(similarityThreshold.value);
+        updateNodeVisibilityThreshold();
+        document.getElementById("similarityThresholdValue").textContent = similarityThreshold.value;
+        refreshDropdown();
+        updateGraph();
     });
 });
 
@@ -154,7 +168,7 @@ function refreshDropdown() {
     const select = document.getElementById("topLinks");
     select.innerHTML = '<option value="">-- Jump to Match --</option>';
     
-    currentLinks
+    visibleLinks
         .sort((a, b) => b.weight - a.weight)
         .forEach((l, i) => {
             const opt = document.createElement("option");
@@ -175,27 +189,34 @@ function linkKey(d) {
 
 let UndoStack = [];
 
-function removeOrphanNodes() {
+function updateNodeVisibilityThreshold() {
+    visibleLinks = currentLinks.filter(l => l.weight >= similarityThreshold.value);
+    visibleNodes = removeOrphanNodes(visibleLinks, false);
+}
+
+function removeOrphanNodes(links, updateUndo) {
     const connected = new Set();
 
-    currentLinks.forEach(l => {
+    links.forEach(l => {
         const s = l.source.id || l.source;
         const t = l.target.id || l.target;
         connected.add(s);
         connected.add(t);
     });
 
-    if (UndoStack.length == 0) {
-        UndoStack.push({
-            Action : "Deletion",
-            AffectedNodes : new Set()
-        });
+    if (updateUndo) {
+        if (UndoStack.length == 0) {
+            UndoStack.push({
+                Action : "Deletion",
+                AffectedNodes : new Set()
+            });
+        }
+    
+        const deletedOrphans = currentNodes.filter(n => !connected.has(n.id));
+        deletedOrphans.forEach(n => UndoStack.at(-1).AffectedNodes.add(n.id))
     }
 
-    const deletedOrphans = currentNodes.filter(n => !connected.has(n.id));
-    deletedOrphans.forEach(n => UndoStack.at(-1).AffectedNodes.add(n.id))
-
-    currentNodes = currentNodes.filter(n => connected.has(n.id));
+    return currentNodes.filter(n => connected.has(n.id));
 }
 
 // deletion
@@ -214,18 +235,19 @@ window.addEventListener("keydown", (e) => {
             return !selectedNodeIds.has(s) && !selectedNodeIds.has(t);
         });
         
-        removeOrphanNodes();
+        currentNodes = removeOrphanNodes(currentLinks, true);
 
         UndoStack.at(-1).AffectedNodes.forEach(n => removedNodeIds.add(n));
-
-        updateGraph();
         
         console.log("DOM elements:", linkLayer.selectAll(".link").size());
         console.log("Data elements:", currentLinks.length);
 
+        updateNodeVisibilityThreshold();
         refreshDropdown();
         clearPreview();
         selectedNodeIds.clear();
+
+        updateGraph();
         
         // Reset visual styles for remaining elements
         setTimeout(() => resetGraph(false), THEME.speedFast + 10);
@@ -237,7 +259,7 @@ window.addEventListener("keydown", (e) => {
 function updateGraph() {
     const link = linkLayer
         .selectAll(".link")
-        .data(currentLinks, linkKey)
+        .data(visibleLinks, linkKey)
         .join(
             enter => enter.append("line")
                 .attr("class", "link")
@@ -253,10 +275,10 @@ function updateGraph() {
 
             exit => exit.remove().on("end", hideTooltip)
         );
-
+    
     const node = nodeLayer
         .selectAll(".node")
-        .data(currentNodes, d => d.id)
+        .data(visibleNodes, d => d.id)
         .join(
             enter => enter.append("circle")
                 .attr("class", "node")
@@ -266,6 +288,10 @@ function updateGraph() {
                 .style("pointer-events", "all")
                 .on("click", (e, d) => {
                     if (e.defaultPrevented) return;
+                    if (removedNodeIds.has(d.id)) {
+                        updateGraph();
+                        return;
+                    }
                     clearPreview();
                     select.value = "";
                     e.stopPropagation();
@@ -295,7 +321,7 @@ function updateGraph() {
 
     const label = labelLayer
         .selectAll(".label")
-        .data(currentNodes, d => d.id)
+        .data(visibleNodes, d => d.id)
         .join(
             enter => enter.append("text")
                 .attr("class", "label")
@@ -308,11 +334,11 @@ function updateGraph() {
             exit => exit.remove()
         );
 
-    simulation.nodes(currentNodes);
-    simulation.force("link").links(currentLinks);
+    simulation.nodes(visibleNodes);
+    simulation.force("link").links(visibleLinks);
     setTimeout(() => {
         simulation.alphaTarget(0.5).restart();
-        setTimeout(() => simulation.alphaTarget(0), 500);
+        setTimeout(() => simulation.alphaTarget(0), THEME.speedFast/2);
     }, THEME.speedFast);
 
     simulation.on("tick", () => {
@@ -358,11 +384,12 @@ window.addEventListener("keydown", (e) => {
                 returningNodes.forEach(n => currentNodes.push(n));
                 returningLinks.forEach(l => currentLinks.push(l));
 
-                updateGraph();
-
+                updateNodeVisibilityThreshold();
+                
                 refreshDropdown();
                 clearPreview();
                 selectedNodeIds.clear();
+                updateGraph();
                 break;
             default:
                 console.log("invalid undo of: ", reversion);
@@ -457,13 +484,18 @@ function generateGraph(links) {
         .force("charge", d3.forceManyBody().strength(d => d.chargeAttr)) 
         .force("center", d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2))
         .force("collision", d3.forceCollide().radius(d => d.radiusAttr + 2)) 
-        .force("contain", containmentForce());
+        .force("contain", containmentForce())
+        .on("end", () => {
+            simulation.on("end", null);
+            resetGraph(true);
+        });
 
+    updateNodeVisibilityThreshold();
+    refreshDropdown();
     updateGraph();
 
     clearPreview();
     selectedNodeIds.clear();
-    resetGraph(true);
 }
 
 function handleNodeClick(e, d) {
