@@ -150,11 +150,22 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     similarityThreshold.addEventListener("change", () => {
+        const numNodes = visibleNodes.length;
+        const numLinks = visibleLinks.length;
+
         console.log(similarityThreshold.value);
+
         updateNodeVisibilityThreshold();
         document.getElementById("similarityThresholdValue").textContent = similarityThreshold.value;
         refreshDropdown();
         updateGraph();
+
+        if (visibleNodes.length < numNodes) console.log("Number of nodes removed: ",  numNodes - visibleNodes.length);
+        else if (visibleNodes.length > numNodes) console.log("Number of nodes added: ", visibleNodes.length - numNodes);
+        
+        if (visibleLinks.length < numLinks) console.log("Number of links removed: ",  numLinks - visibleLinks.length);
+        else if (visibleLinks.length > numLinks) console.log("Number of links added: ", visibleLinks.length - numLinks);
+        
     });
 });
 
