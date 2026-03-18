@@ -24,9 +24,11 @@ export const THEME = {
     radiusFlex: 20,
     degreeToNodeSideScalingFactor: 5,
 
-    defaultNodeCharge: -400,
-    nodeChargeFlex: 100,
+    defaultNodeCharge: -500,
+    nodeChargeFlex: 150,
 
+
+    // make these into variables in an extended menu
     similarityExponent: 2,
     criticalSimilarityThreshold: 20, // [XX]%
     maxReasonableSimilarity: 50,

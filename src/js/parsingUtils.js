@@ -71,7 +71,6 @@ export function getNodesFromLinks(links) {
             if (!nodesMap[id]) {
                 nodesMap[id] =  { 
                                     id, 
-                                    weightScore: 0, // deprecated soon
                                     
                                     maxSimilarity: 0,
                                     sumSimilarity: {raw: 0, pow: 0},
@@ -85,7 +84,6 @@ export function getNodesFromLinks(links) {
                                     chargeAttr: THEME.defaultNodeCharge,
                                 };
             }
-            nodesMap[id].weightScore += Math.pow(l.weight, THEME.similarityExponent);
             
             if (nodesMap[id].maxSimilarity < l.weight) {
                 nodesMap[id].maxSimilarity = l.weight;

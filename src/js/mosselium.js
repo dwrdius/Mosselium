@@ -487,9 +487,6 @@ function generateGraph(links) {
 
     refreshDropdown()
 
-    // const maxWeight = d3.max(currentNodes, d => d.weightScore);
-    // colorScale = d3.scaleLinear().domain([0, maxWeight*0.5, maxWeight]).range([THEME.gradientMin, THEME.gradientMid, THEME.gradientMax]);
-
     simulation = d3.forceSimulation(currentNodes)
         .force("link", d3.forceLink(links).id(d => d.id).distance(150))
         .force("charge", d3.forceManyBody().strength(d => d.chargeAttr)) 
