@@ -3,6 +3,15 @@
 mossCCFile="flaggerUI.cc"
 tempOutfile="flagbuilder.out"
 
+keepFlagBuilder=false
+
+while getopts "k" opt; do
+    case $opt in
+        k) keepFlagBuilder=true ;;
+        *) echo 'Use -k to keep the flagging file' ;;
+    esac
+done
+
 if [[ ! -f "./${mossCCFile}" ]]; then
     echo "Could not find ${mossCCFile}"
     exit 1
@@ -20,6 +29,9 @@ if [[ "${rval}" -ne 0 ]]; then
 fi
 
 bash "./${tempOutfile}"
-rm "./${tempOutfile}"
+
+if [[ "${keepFlagBuilder}" = "false" ]]; then
+    rm "./${tempOutfile}"
+fi
 
 # zip -r ./mossFiles.zip ./flagged/*

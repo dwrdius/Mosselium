@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for file in $( find -name "*.{cc,cpp}" -type f ); do
+for file in $( find . -type f \( -name "*.cc" -o -name "*.cpp" \) ); do
     directory=$(dirname "${file}")
     cd "${directory}/.."
     pwd
