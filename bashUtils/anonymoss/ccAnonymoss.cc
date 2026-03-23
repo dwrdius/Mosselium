@@ -29,8 +29,8 @@ int main(int argc, char* argv[]) {
             string s = "<";
             assert(fin >> s);
             // .html">username or .<p>...
-            if (s[0] == '<') continue;
-            assert(s.substr(0, 6) == "html\">");
+            if (s.substr(0, 6) != "html\">") continue;
+            // assert(s.substr(0, 6) == "html\">");
             string username = s.substr(6);
             if (mp.find(username) == mp.end()) mp[username] = unique++;
         }
