@@ -1,5 +1,5 @@
 import { fileMap, blobUrlMap } from "./mosselium.js";
-import { THEME, colorScale } from "./globals.js";
+import { THEME, audioFAHHH, colorScale } from "./globals.js";
 
 export function parseMoss(htmlText) {
     const doc = new DOMParser().parseFromString(htmlText, "text/html");
@@ -132,4 +132,26 @@ export async function getProcessedHtml(fileName) {
         if (blobUrlMap[path]) return `${attr}="${blobUrlMap[path]}"`;
         return match;
     });
+}
+
+export function copyStringToClipboard(textToCopy) {
+    // navigator.clipboard.writeText() returns a Promise
+    navigator.clipboard.writeText(textToCopy)
+        .then(() => {
+            // Success feedback (optional)
+            if (textToCopy !== "") {
+                audioFAHHH.volume = 0.2;
+                audioFAHHH.play();
+                console.log(`Copied text to clipboard: ${textToCopy}`);
+                alert(`Copied text to clipboard: ${textToCopy}`);
+            }
+            else {
+                alert(`There is no text to copy.`);
+            }
+        })
+        .catch((err) => {
+            // Error handling (optional)
+            console.error(`Could not copy text: ${err}`);
+            alert(`Copy failed! ${err}`);
+        });
 }

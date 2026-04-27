@@ -8,13 +8,15 @@ import {
     getPreviewWidth
 } from "./previews.js";
 import { showTooltip, hideTooltip, updateTooltipPosition } from "./tooltips.js";
-import { THEME, audioBoom, audioRoll, boomChance } from "./globals.js";
-import { parseMoss, getNodesFromLinks, getProcessedHtml, normalizeHTMLHeaders } from "./parsingUtils.js";
+import { THEME, audioBoom, audioRoll, audioError, boomChance } from "./globals.js";
+import { parseMoss, getNodesFromLinks, getProcessedHtml, normalizeHTMLHeaders, copyStringToClipboard } from "./parsingUtils.js";
 
 export let fileMap = {}, blobUrlMap = {};
 let currentLinks = [], currentNodes = [];
 let visibleLinks = [], visibleNodes = [];
 let allLinks = [], allNodes = [];
+
+let flaggedStrings = new Set();
 
 let simulation, svg, container, zoom;
 let selectedNodeIds = new Set();
@@ -29,7 +31,7 @@ const isMac = /Mac/i.test(navigator.userAgent);
 const cmdKeyName = isMac ? "⌘ Command" : "Ctrl";
 const edgeScale = d3.scalePow().exponent(NodeWeightPower).domain([0, 100]).range([2, 20]);
 
-let folderInput, uploadBtn, resetBtn, select, autoRecenterToggle, similarityThreshold;
+let folderInput, uploadBtn, resetBtn, select, autoRecenterToggle, similarityThreshold, criticalSimilaritySlider;
 let linkLayer, nodeLayer, labelLayer;
 
 function initDOMReferences() {
@@ -39,9 +41,13 @@ function initDOMReferences() {
     select = document.getElementById("topLinks");
     autoRecenterToggle = document.getElementById("autoRecenter");
     similarityThreshold = document.getElementById("similarityThreshold");
+    criticalSimilaritySlider = document.getElementById("criticalSimilaritySlider");
 
     similarityThreshold.value = 10;
     document.getElementById("similarityThresholdValue").textContent = 10;
+
+    criticalSimilaritySlider.value = 30;
+    document.getElementById("criticalSimilaritySliderValue").textContent = 30;
 }
 
 function initSVGComponents() {
@@ -167,6 +173,26 @@ document.addEventListener("DOMContentLoaded", () => {
         else if (visibleLinks.length > numLinks) console.log("Number of links added: ", visibleLinks.length - numLinks);
         
     });
+
+    criticalSimilaritySlider.addEventListener("change", () => {
+        THEME.criticalSimilarityThreshold = criticalSimilaritySlider.value;
+        document.getElementById("criticalSimilaritySliderValue").textContent = criticalSimilaritySlider.value;
+        
+        // // js hates me and I'd rather redo this in wasm
+        // if (allNodes.length > 0) {
+        //     allNodes = getNodesFromLinks(allLinks);
+        //     const currNodeSet = new Set(currentNodes.map(n => n.id));
+        //     currentNodes = allNodes.filter(n => currNodeSet.has(n.id));
+    
+        //     console.log("Set: ", currNodeSet);
+        //     console.log("nodes: ", currentNodes);
+
+        //     updateNodeVisibilityThreshold();
+        //     refreshDropdown();
+    
+        //     updateGraph();
+        // }
+    });
 });
 
 window.addEventListener("keydown", (e) => {
@@ -266,6 +292,35 @@ window.addEventListener("keydown", (e) => {
         console.log(UndoStack);
     }
 });
+
+window.addEventListener("keydown", (e) => {
+    if (selectedNodeIds.size > 1 && (e.key == "f" || e.key == "Enter")) {
+        let currGroup = [...selectedNodeIds].sort().join(", ");
+        if (flaggedStrings.has(currGroup)) {
+            audioError.play();
+            return;
+        }
+        
+        UndoStack.push({
+            Action : "Flagging",
+            FlagKey : currGroup
+        });
+        
+        flaggedStrings.add(currGroup);
+
+        audioBoom.play();
+        
+        console.log(currGroup);
+        console.log(flaggedStrings);
+    }
+});
+
+window.addEventListener("keydown", (e) => {
+    if (e.key == "c" && (e.metaKey || e.ctrlKey)) {
+        copyStringToClipboard([...flaggedStrings].join("; "));
+    }
+});
+
 
 function updateGraph() {
     const link = linkLayer
@@ -402,6 +457,11 @@ window.addEventListener("keydown", (e) => {
                 selectedNodeIds.clear();
                 updateGraph();
                 break;
+            
+            case "Flagging":
+                flaggedStrings.delete(reversion.FlagKey);
+                break;
+
             default:
                 console.log("invalid undo of: ", reversion);
         }

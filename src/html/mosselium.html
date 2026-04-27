@@ -17,15 +17,27 @@
         <select id="topLinks"><option value="">-- Jump to Match --</option></select>
         <div style="display: flex; flex-direction: column; gap: 15px; align-items: left;">
             <button id="resetBtn" style="font-size: 11px; border: none; color: #fff;">Reset View</button>
+            
+            <!-- preview zoom slider -->
             <div style="display: flex; gap: 15px; align-items: left; justify-content: left;">
                 <label for="previewScale" style="font-size: 11px; color: #fff;">Preview Scale:</label>
                 <input type="range" id="previewScale" min="0.25" max="1" step="0.05" value="0.4" autocomplete="off" style="height: 14px; width: 50%;">
             </div>
+
+            <!-- threshold for culling responses -->
             <div style="display: flex; gap: 15px; align-items: left; justify-content: left;">
                 <label for="similarityThreshold" style="font-size: 11px; color: #fff;">Min Similarity:</label>
-                <input type="range" id="similarityThreshold" min="10" max="30" step="1" value="10" autocomplete="off" style="height: 14px; width: 50%;">
+                <input type="range" id="similarityThreshold" min="9" max="40" step="1" value="10" autocomplete="off" style="height: 14px; width: 50%;">
                 <label for="similarityThreshold" style="font-size: 11px; color: #fff;"><span id="similarityThresholdValue">10</span>%</label>
             </div>
+
+            <!-- Critical slider (for determining node attributes) -->
+            <div style="display: flex; gap: 15px; align-items: left; justify-content: left;">
+                <label for="criticalSimilaritySlider" style="font-size: 11px; color: #fff;">Critical Similarity:</label>
+                <input type="range" id="criticalSimilaritySlider" min="10" max="70" step="1" value="30" autocomplete="off" style="height: 14px; width: 50%;">
+                <label for="criticalSimilaritySlider" style="font-size: 11px; color: #fff;"><span id="criticalSimilaritySliderValue">40</span>%</label>
+            </div>
+
             <div style="display: flex; gap: 15px; align-items: left; justify-content: left;">
                 <label for="autoRecenter" style="font-size: 11px; color: #fff;">Automatic Recentering:</label>
                 <input type="checkbox" id="autoRecenter" checked autocomplete="off">
